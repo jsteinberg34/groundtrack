@@ -22,6 +22,13 @@ class GeoBox:
     lat_max: float
     lon_min: float
     lon_max: float
+    box_size_deg: float
+    lat_idx: int
+    lon_idx: int
+
+    @property
+    def box_id(self) -> str:
+        return f"box_{self.lat_idx:03d}"
 
 
 @dataclass
@@ -32,3 +39,11 @@ class BoxWindow:
     box: GeoBox
     starttime: datetime
     endtime: datetime
+    box: GeoBox
+    t_enter: datetime
+    t_exit: datetime
+    t_download_start: datetime
+    t_download_end: datetime
+    first_track_index: int
+    last_track_index: int
+    n_points: int
