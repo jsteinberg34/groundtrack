@@ -1,0 +1,12 @@
+[project]
+name = "reentry-seismo"
+version = "0.1.0"
+description = "Seismic detection pipeline for orbital reentry events"
+authors = [{name="Joseph Steinberg"}]
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "obspy",
+    "skyfield"
+]
