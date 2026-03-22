@@ -34,11 +34,8 @@ class GeoBox:
 @dataclass
 class BoxWindow:
     """
-    Spatial + temporal window used for a MassDownloader query.
+    Full spatial + temporal window for one download box.
     """
-    box: GeoBox
-    starttime: datetime
-    endtime: datetime
     box: GeoBox
     t_enter: datetime
     t_exit: datetime

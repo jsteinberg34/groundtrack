@@ -74,8 +74,8 @@ def track_to_box_windows(
         lon_min = wrap_lon_deg(lon_min - corridor_deg_lon)
         lon_max = wrap_lon_deg(lon_max + corridor_deg_lon)
 
-        t_enter = chunk[0].t_utc
-        t_exit = chunk[-1].t_utc
+        t_enter = chunk[0].time
+        t_exit = chunk[-1].time
         t_download_start, t_download_end = pad_window(
             t_enter,
             t_exit,
