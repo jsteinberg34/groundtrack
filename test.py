@@ -3,7 +3,7 @@ from reentry_seismo.geodesy import wrap_lon_deg, min_distance_km_to_track, lon_b
 from reentry_seismo.tiling import track_to_box_windows
 from reentry_seismo import download_boxes
 
-print("Library imported successfully!")
+print("types, geodesy, tiling, and download_boxes imported successfully!")
 
 from reentry_seismo.stations import (
     find_stationxml_files,
@@ -20,7 +20,7 @@ from reentry_seismo.stations import load_and_filter_stations
 
 boxes_root = "data/event_name/boxes"  # e.g. data/event_name/boxes
 
-# You’ll reuse your existing track_points from notebook eventually
+# Will reuse existing track_points from notebook eventually
 track_points = []  # placeholder for now
 
 result = load_and_filter_stations(
@@ -30,3 +30,10 @@ result = load_and_filter_stations(
 )
 
 print("Filtered stations:", len(result["filtered_stations"]))
+
+
+# Test plotting import 
+print("------------------------------------------")
+from reentry_seismo import plot_track_and_boxes, plot_stations, plot_station_comparison
+
+print("Plotting imports successfully")
