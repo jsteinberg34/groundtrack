@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from datetime import timedelta
 from obspy.geodetics import gps2dist_azimuth, kilometers2degrees
@@ -129,3 +131,31 @@ def track_to_box_windows(
         start_idx = next_start_idx
 
     return windows
+
+
+def box_windows_to_download_requests(box_windows):
+    """
+    Convert BoxWindow objects into the simple request dictionaries that the
+    downloader expects.
+
+    Why:
+    In the notebook we were doing this conversion manually. For Demo 2 and
+    for the library in general, this is one of the main pieces of glue between
+    the tiling stage and the download stage.
+    """
+    requests = []
+
+    for bw in box_windows:
+        requests.append(
+            {
+                "box_id": bw.box.box_id,
+                "lat_min": bw.box.lat_min,
+                "lat_max": bw.box.lat_max,
+                "lon_min": bw.box.lon_min,
+                "lon_max": bw.box.lon_max,
+                "t_start_utc": bw.t_download_start,
+                "t_end_utc": bw.t_download_end,
+            }
+        )
+
+    return requests
