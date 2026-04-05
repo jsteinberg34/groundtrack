@@ -69,12 +69,13 @@ def track_to_box_windows(
 
         lon_min, lon_max = lon_bounds_dateline_safe(lons)
 
-        lat_mid = float(np.mean(lats))
-        cosphi = np.cos(np.deg2rad(lat_mid))
-        corridor_deg_lon = corridor_deg_lat / max(cosphi, 1e-6)
+        # --- Previousily added extra longitude padding here ---
+        # lat_mid = float(np.mean(lats))
+        # cosphi = np.cos(np.deg2rad(lat_mid))
+        # corridor_deg_lon = corridor_deg_lat / max(cosphi, 1e-6)
 
-        lon_min = wrap_lon_deg(lon_min - corridor_deg_lon)
-        lon_max = wrap_lon_deg(lon_max + corridor_deg_lon)
+        # lon_min = wrap_lon_deg(lon_min - corridor_deg_lon)
+        # lon_max = wrap_lon_deg(lon_max + corridor_deg_lon)
 
         t_enter = chunk[0].time
         t_exit = chunk[-1].time
