@@ -64,8 +64,8 @@ def track_to_box_windows(
         lats = np.array([p.lat for p in chunk], dtype=float)
         lons = np.array([p.lon for p in chunk], dtype=float)
 
-        lat_min = float(lats.min() - corridor_deg_lat)
-        lat_max = float(lats.max() + corridor_deg_lat)
+        lat_min = float(max(-90.0, lats.min() - corridor_deg_lat))
+        lat_max = float(min(90.0, lats.max() + corridor_deg_lat))
 
         lon_min, lon_max = lon_bounds_dateline_safe(lons)
 
