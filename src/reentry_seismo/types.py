@@ -44,3 +44,20 @@ class BoxWindow:
     first_track_index: int
     last_track_index: int
     n_points: int
+
+
+@dataclass
+class TrackSegment:
+    """
+    Precomputed geometry for one great-circle arc between two consecutive
+    track points. Built lazily per box and reused across station distance
+    checks within that box.
+
+    All angular values are in radians.
+    """
+    lat_a_rad: float
+    lon_a_rad: float
+    lat_b_rad: float
+    lon_b_rad: float
+    bearing_ab_rad: float  # initial bearing from A to B
+    length_rad: float      # angular arc length of the segment

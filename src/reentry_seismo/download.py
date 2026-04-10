@@ -10,6 +10,12 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 
 from .geodesy import min_distance_km_to_track
 
+from .stations import (
+    parse_stationxml_files,
+    deduplicate_stations,
+    filter_stations_by_track_distance,
+)
+
 
 def _normalize_providers(providers):
     """
@@ -44,89 +50,6 @@ def _safe_loc(location_code):
     but we still want filenames that are consistent.
     """
     return location_code if location_code else ""
-
-
-def _parse_stationxml_files(xml_files):
-    """
-    Read StationXML files and extract simple station metadata rows.
-
-    Returns rows like:
-        {
-            "network": "...",
-            "station": "...",
-            "lat": ...,
-            "lon": ...,
-            "source_xml": "..."
-        }
-
-    Why:
-    After we query candidate inventory for a box, we want a very simple
-    station list we can filter against the propagated track.
-    """
-    station_rows = []
-
-    for xml in xml_files:
-        try:
-            inv = read_inventory(str(xml))
-
-            for net in inv:
-                for sta in net:
-                    station_rows.append(
-                        {
-                            "network": net.code,
-                            "station": sta.code,
-                            "lat": float(sta.latitude),
-                            "lon": float(sta.longitude),
-                            "source_xml": str(xml),
-                        }
-                    )
-        except Exception as e:
-            # One bad XML should not kill the entire run.
-            print(f"Could not read StationXML: {xml} -> {repr(e)}")
-
-    return station_rows
-
-
-def _deduplicate_stations(station_rows):
-    """
-    Deduplicate stations by (network, station).
-
-    Why:
-    The same physical station can appear from multiple providers or multiple
-    inventory files. For filtering, we only want one logical copy.
-    """
-    seen = set()
-    unique_rows = []
-
-    for row in station_rows:
-        key = (row["network"], row["station"])
-        if key not in seen:
-            seen.add(key)
-            unique_rows.append(row)
-
-    return unique_rows
-
-
-def _filter_stations_by_track_distance(station_rows, track_points, corridor_km):
-    """
-    Keep only stations whose minimum great-circle distance to the propagated
-    track is within corridor_km.
-
-    Why:
-    This is the key physical filter. The box is a coarse region used to find
-    candidate stations, but the actual scientific rule is distance to the track.
-    """
-    kept = []
-
-    for row in station_rows:
-        d_km = min_distance_km_to_track(row["lat"], row["lon"], track_points)
-
-        if d_km <= corridor_km:
-            row_copy = dict(row)
-            row_copy["min_dist_km"] = d_km
-            kept.append(row_copy)
-
-    return kept
 
 
 def _provider_station_query(
@@ -334,13 +257,13 @@ def download_boxes(
                     print(f"    inventory from {provider_name}: FAILED -> {repr(e)}")
 
         # Parse raw candidate stations from the StationXML files we just saved.
-        station_rows = _parse_stationxml_files(provider_stationxml_files)
-        unique_stations = _deduplicate_stations(station_rows)
+        station_rows = parse_stationxml_files(provider_stationxml_files)
+        unique_stations = deduplicate_stations(station_rows)
 
         # ------------------------------------------------------------
         # Stage 2: keep only stations within the physical corridor
         # ------------------------------------------------------------
-        kept_stations = _filter_stations_by_track_distance(
+        kept_stations = filter_stations_by_track_distance(
             unique_stations,
             track_points=track_points,
             corridor_km=corridor_km,
