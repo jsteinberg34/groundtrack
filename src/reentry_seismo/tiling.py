@@ -91,9 +91,7 @@ def track_to_box_windows(
             lat_max=lat_max,
             lon_min=lon_min,
             lon_max=lon_max,
-            box_size_deg=np.nan,
-            lat_idx=box_counter,
-            lon_idx=0,
+            box_index=box_counter,
         )
 
         windows.append(BoxWindow(

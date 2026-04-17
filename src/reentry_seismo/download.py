@@ -13,8 +13,6 @@ from obspy.clients.fdsn.mass_downloader import (
     Restrictions,
 )
 
-from .geodesy import min_distance_km_to_track
-
 from .stations import (
     parse_stationxml_files,
     deduplicate_stations,
@@ -45,19 +43,6 @@ def _count_files(path: Path, pattern: str) -> int:
         - recording how many files ended up on disk
     """
     return sum(1 for p in path.rglob(pattern) if p.is_file())
-
-
-# mseed_storage function replaces this
-'''
-def _safe_loc(location_code):
-    """
-    Normalize location code for filenames.
-
-    ObsPy/metadata sometimes uses an empty string for location. That is valid,
-    but we still want filenames that are consistent.
-    """
-    return location_code if location_code else ""
-'''
 
 
 def _provider_station_query(
@@ -105,84 +90,13 @@ def _make_mseed_storage(approved_stations: set[tuple[str, str]], wav_dir: Path):
     return storage
 
 
-# Remove for now, testing different download integration
-'''
-def _download_station_waveforms(
-    client: Client,
-    station_row: dict,
-    req: dict,
-    wav_dir: Path,
-    channel_priorities: Sequence[str],
-    location_priorities: Sequence[str],
-):
-    """
-    Attempt to download waveform data for one already-approved station.
-
-    Returns a small result dict describing success/failure.
-
-    Why:
-    By this point the station has already passed the 100 km filter, so now
-    we actually try to grab the waveform data.
-    """
-    net = station_row["network"]
-    sta = station_row["station"]
-
-    starttime = UTCDateTime(req["t_start_utc"])
-    endtime = UTCDateTime(req["t_end_utc"])
-
-    last_error = None
-
-    # Try preferred channels and location codes in order.
-    # This mirrors the logic from the notebook, but only after the station
-    # has already been judged physically relevant.
-    for channel in channel_priorities:
-        for location in location_priorities:
-            try:
-                st = client.get_waveforms(
-                    network=net,
-                    station=sta,
-                    location=location,
-                    channel=channel,
-                    starttime=starttime,
-                    endtime=endtime,
-                    attach_response=False,
-                )
-
-                if len(st) == 0:
-                    continue
-
-                loc = _safe_loc(location)
-                out_path = wav_dir / f"{net}.{sta}.{loc}.{channel}.mseed"
-                st.write(str(out_path), format="MSEED")
-
-                return {
-                    "status": "ok",
-                    "network": net,
-                    "station": sta,
-                    "channel": channel,
-                    "location": loc,
-                    "waveform_file": str(out_path),
-                }
-
-            except Exception as e:
-                last_error = repr(e)
-
-    return {
-        "status": "failed",
-        "network": net,
-        "station": sta,
-        "error": last_error,
-    }
-'''
-
-
 def download_boxes(
     download_requests: Iterable[dict],
     track_points,
     output_base: str | Path,
     event_name: str,
     corridor_km: float = 100.0,
-    providers: Sequence[str] | None = ("EARTHSCOPE"),
+    providers: Sequence[str] | None = ("EARTHSCOPE",),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
@@ -313,52 +227,6 @@ def download_boxes(
         with open(filtered_summary_path, "w", encoding="utf-8") as f:
             json.dump(kept_stations, f, indent=2, default=str)
 
-
-        # ------------------------------------------------------------
-        # Stage 3: only now download waveforms for the kept stations
-        # ------------------------------------------------------------
-
-        '''
-        waveform_results = []
-
-        for station_row in kept_stations:
-            station_downloaded = False
-            station_errors = []
-
-            # Try providers in the order given until one succeeds.
-            for provider_name, client in clients.items():
-                wf_result = _download_station_waveforms(
-                    client=client,
-                    station_row=station_row,
-                    req=req,
-                    wav_dir=wav_dir,
-                    channel_priorities=channel_priorities,
-                    location_priorities=location_priorities,
-                )
-
-                if wf_result["status"] == "ok":
-                    wf_result["provider"] = provider_name
-                    waveform_results.append(wf_result)
-                    station_downloaded = True
-                    break
-                else:
-                    station_errors.append(
-                        {
-                            "provider": provider_name,
-                            "error": wf_result.get("error"),
-                        }
-                    )
-
-            if not station_downloaded:
-                waveform_results.append(
-                    {
-                        "status": "failed",
-                        "network": station_row["network"],
-                        "station": station_row["station"],
-                        "errors": station_errors,
-                    }
-                )
-        '''
 
         # ------------------------------------------------------------
         # Stage 3: bulk waveform download via MassDownloader
