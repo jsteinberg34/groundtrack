@@ -4,11 +4,14 @@ import json
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from obspy import UTCDateTime, read_inventory
+from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-
-from .geodesy import min_distance_km_to_track
+from obspy.clients.fdsn.mass_downloader import (
+    MassDownloader,
+    RectangularDomain,
+    Restrictions,
+)
 
 from .stations import (
     parse_stationxml_files,
@@ -42,16 +45,6 @@ def _count_files(path: Path, pattern: str) -> int:
     return sum(1 for p in path.rglob(pattern) if p.is_file())
 
 
-def _safe_loc(location_code):
-    """
-    Normalize location code for filenames.
-
-    ObsPy/metadata sometimes uses an empty string for location. That is valid,
-    but we still want filenames that are consistent.
-    """
-    return location_code if location_code else ""
-
-
 def _provider_station_query(
     client: Client,
     req: dict,
@@ -77,72 +70,24 @@ def _provider_station_query(
     )
 
 
-def _download_station_waveforms(
-    client: Client,
-    station_row: dict,
-    req: dict,
-    wav_dir: Path,
-    channel_priorities: Sequence[str],
-    location_priorities: Sequence[str],
-):
+def _make_mseed_storage(approved_stations: set[tuple[str, str]], wav_dir: Path):
     """
-    Attempt to download waveform data for one already-approved station.
+    Build a callable for MassDownloader's mseed_storage parameter.
 
-    Returns a small result dict describing success/failure.
+    MassDownloader calls this once per channel/time-interval it considers
+    downloading. Returning a file path means "download here"; returning
+    None means "skip this station entirely."
 
-    Why:
-    By this point the station has already passed the 100 km filter, so now
-    we actually try to grab the waveform data.
+    We use this to enforce the corridor distance filter: only stations
+    that passed Phase 1 filtering are in approved_stations.
     """
-    net = station_row["network"]
-    sta = station_row["station"]
+    def storage(network, station, location, channel, starttime, endtime):
+        if (network, station) not in approved_stations:
+            return None
+        loc = location if location else ""
+        return str(wav_dir / f"{network}.{station}.{loc}.{channel}.mseed")
 
-    starttime = UTCDateTime(req["t_start_utc"])
-    endtime = UTCDateTime(req["t_end_utc"])
-
-    last_error = None
-
-    # Try preferred channels and location codes in order.
-    # This mirrors the logic from the notebook, but only after the station
-    # has already been judged physically relevant.
-    for channel in channel_priorities:
-        for location in location_priorities:
-            try:
-                st = client.get_waveforms(
-                    network=net,
-                    station=sta,
-                    location=location,
-                    channel=channel,
-                    starttime=starttime,
-                    endtime=endtime,
-                    attach_response=False,
-                )
-
-                if len(st) == 0:
-                    continue
-
-                loc = _safe_loc(location)
-                out_path = wav_dir / f"{net}.{sta}.{loc}.{channel}.mseed"
-                st.write(str(out_path), format="MSEED")
-
-                return {
-                    "status": "ok",
-                    "network": net,
-                    "station": sta,
-                    "channel": channel,
-                    "location": loc,
-                    "waveform_file": str(out_path),
-                }
-
-            except Exception as e:
-                last_error = repr(e)
-
-    return {
-        "status": "failed",
-        "network": net,
-        "station": sta,
-        "error": last_error,
-    }
+    return storage
 
 
 def download_boxes(
@@ -151,7 +96,7 @@ def download_boxes(
     output_base: str | Path,
     event_name: str,
     corridor_km: float = 100.0,
-    providers: Sequence[str] | None = ("IRIS", "SCEDC", "NCEDC"),
+    providers: Sequence[str] | None = ("EARTHSCOPE",),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
@@ -188,6 +133,8 @@ def download_boxes(
         except Exception as e:
             if verbose:
                 print(f"Could not initialize provider {provider_name}: {repr(e)}")
+
+    mdl = MassDownloader(providers=provider_names)  # One instance used for every box
 
     results = []
     n_ok = 0
@@ -280,48 +227,41 @@ def download_boxes(
         with open(filtered_summary_path, "w", encoding="utf-8") as f:
             json.dump(kept_stations, f, indent=2, default=str)
 
+
         # ------------------------------------------------------------
-        # Stage 3: only now download waveforms for the kept stations
+        # Stage 3: bulk waveform download via MassDownloader
         # ------------------------------------------------------------
-        waveform_results = []
+        approved = {(s["network"], s["station"]) for s in kept_stations}
 
-        for station_row in kept_stations:
-            station_downloaded = False
-            station_errors = []
+        if approved:
+            domain = RectangularDomain(
+                minlatitude=req["lat_min"],
+                maxlatitude=req["lat_max"],
+                minlongitude=req["lon_min"],
+                maxlongitude=req["lon_max"],
+            )
 
-            # Try providers in the order given until one succeeds.
-            for provider_name, client in clients.items():
-                wf_result = _download_station_waveforms(
-                    client=client,
-                    station_row=station_row,
-                    req=req,
-                    wav_dir=wav_dir,
-                    channel_priorities=channel_priorities,
-                    location_priorities=location_priorities,
+            restrictions = Restrictions(
+                starttime=UTCDateTime(req["t_start_utc"]),
+                endtime=UTCDateTime(req["t_end_utc"]),
+                network=",".join(sorted({s["network"] for s in kept_stations})),
+                station=",".join(sorted({s["station"] for s in kept_stations})),
+                channel_priorities=list(channel_priorities),
+                location_priorities=list(location_priorities),
+                reject_channels_with_gaps=True,
+                minimum_length=0.9,
+            )
+
+            try:
+                mdl.download(
+                    domain,
+                    restrictions,
+                    mseed_storage=_make_mseed_storage(approved, wav_dir),
+                    stationxml_storage=str(inv_dir / "{network}.{station}.xml"),
                 )
-
-                if wf_result["status"] == "ok":
-                    wf_result["provider"] = provider_name
-                    waveform_results.append(wf_result)
-                    station_downloaded = True
-                    break
-                else:
-                    station_errors.append(
-                        {
-                            "provider": provider_name,
-                            "error": wf_result.get("error"),
-                        }
-                    )
-
-            if not station_downloaded:
-                waveform_results.append(
-                    {
-                        "status": "failed",
-                        "network": station_row["network"],
-                        "station": station_row["station"],
-                        "errors": station_errors,
-                    }
-                )
+            except Exception as e:
+                if verbose:
+                    print(f"    MassDownloader error: {repr(e)}")
 
         new_mseed = _count_files(wav_dir, "*.mseed")
         new_xml = _count_files(inv_dir, "*.xml")
@@ -333,7 +273,6 @@ def download_boxes(
             "filtered_station_count": len(kept_stations),
             "mseed_files": new_mseed,
             "stationxml_files": new_xml,
-            "waveform_results": waveform_results,
         }
 
         n_ok += 1

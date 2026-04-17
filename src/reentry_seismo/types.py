@@ -22,13 +22,11 @@ class GeoBox:
     lat_max: float
     lon_min: float
     lon_max: float
-    box_size_deg: float
-    lat_idx: int
-    lon_idx: int
+    box_index: int  # sequential counter, used for box_id
 
     @property
     def box_id(self) -> str:
-        return f"box_{self.lat_idx:03d}"
+        return f"box_{self.box_index:03d}"
 
 
 @dataclass

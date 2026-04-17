@@ -9,6 +9,13 @@ from .geodesy import wrap_lon_deg, lon_bounds_dateline_safe
 
 
 def pad_window(t_enter, t_exit, pre_pad_minutes, post_pad_minutes):
+    """
+    Expand a satellite pass time window by fixed amounts before and after.
+
+    pre_pad_minutes=2 gives a small buffer before the satellite enters the box.
+    post_pad_minutes=13 gives a longer tail after exit -- sonic boom signals
+    from a re-entry can arrive at a station well after the satellite has passed.
+    """
     return (
         t_enter - timedelta(minutes=pre_pad_minutes),
         t_exit + timedelta(minutes=post_pad_minutes)
@@ -91,9 +98,7 @@ def track_to_box_windows(
             lat_max=lat_max,
             lon_min=lon_min,
             lon_max=lon_max,
-            box_size_deg=np.nan,
-            lat_idx=box_counter,
-            lon_idx=0,
+            box_index=box_counter,
         )
 
         windows.append(BoxWindow(

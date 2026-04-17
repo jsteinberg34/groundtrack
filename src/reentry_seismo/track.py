@@ -31,7 +31,8 @@ def load_spacetrack_client(username: str | None = None, password: str | None = N
     if not username or not password:
         raise ValueError(
             "Space-Track credentials not found. "
-            "Pass username/password directly or set SPACETRACK_USER and SPACETRACK_PASS."
+            "Pass username/password directly or set SPACETRACK_USER and SPACETRACK_PASS. "
+            "If you do not have an account, register at https://www.space-track.org."
         )
 
     return SpaceTrackClient(identity=username, password=password)
