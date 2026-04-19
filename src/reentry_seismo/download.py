@@ -19,6 +19,18 @@ from .stations import (
     filter_stations_by_track_distance,
 )
 
+from .processing import (
+    process_box,
+    DEFAULT_PRE_FILT,
+    DEFAULT_WATER_LEVEL,
+    DEFAULT_OUTPUT,
+    DEFAULT_TAPER_PCT,
+    DEFAULT_FREQMIN,
+    DEFAULT_FREQMAX,
+    DEFAULT_CORNERS,
+    DEFAULT_ZEROPHASE,
+)
+
 
 def _normalize_providers(providers):
     """
@@ -101,6 +113,30 @@ def download_boxes(
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
     verbose: bool = True,
+
+   # ------------------------------------------------------------------
+    # Optional post-download processing
+    # ------------------------------------------------------------------
+    # When apply_processing is False (default), raw data is downloaded and
+    # nothing else happens -- this preserves the original behavior. When it
+    # is True, each box is processed immediately after its waveforms land
+    # on disk, using the parameters below. All defaults match process_boxes()
+    # so the one-shot and two-step workflows produce identical output.
+    apply_processing: bool = False,
+    # Pre-processing (before response removal)
+    demean: bool = True,
+    detrend_linear: bool = True,
+    taper_pct: float = DEFAULT_TAPER_PCT,
+    # Response removal
+    output: str = DEFAULT_OUTPUT,
+    pre_filt: tuple[float, float, float, float] | None = DEFAULT_PRE_FILT,
+    water_level: float = DEFAULT_WATER_LEVEL,
+    # Bandpass (after response removal)
+    apply_bandpass: bool = True,
+    freqmin: float = DEFAULT_FREQMIN,
+    freqmax: float = DEFAULT_FREQMAX,
+    corners: int = DEFAULT_CORNERS,
+    zerophase: bool = DEFAULT_ZEROPHASE
 ) -> dict:
     """
     Main box-based download pipeline.
@@ -275,6 +311,35 @@ def download_boxes(
             "stationxml_files": new_xml,
         }
 
+        # ------------------------------------------------------------
+        # Optional: process this box's waveforms right after download
+        # ------------------------------------------------------------
+        if apply_processing and new_mseed > 0:
+            if verbose:
+                print(f"    processing {box_id} ...")
+            proc_result = process_box(
+                box_dir,
+                demean=demean,
+                detrend_linear=detrend_linear,
+                taper_pct=taper_pct,
+                output=output,
+                pre_filt=pre_filt,
+                water_level=water_level,
+                apply_bandpass=apply_bandpass,
+                freqmin=freqmin,
+                freqmax=freqmax,
+                corners=corners,
+                zerophase=zerophase,
+                overwrite_existing=overwrite_existing,
+                verbose=verbose,
+            )
+            box_result["processing"] = {
+                "traces_in": proc_result["traces_in"],
+                "traces_out": proc_result["traces_out"],
+                "skipped_existing": proc_result["skipped_existing"],
+                "n_errors": len(proc_result["errors"]),
+            }        
+
         n_ok += 1
         results.append(box_result)
 
@@ -290,6 +355,22 @@ def download_boxes(
         "ok": n_ok,
         "skipped_existing": n_skip,
         "failed": n_fail,
+        "processing": {
+            "applied": apply_processing,
+            "params": {
+                "demean": demean,
+                "detrend_linear": detrend_linear,
+                "taper_pct": taper_pct,
+                "output": output,
+                "pre_filt": list(pre_filt) if pre_filt is not None else None,
+                "water_level": water_level,
+                "apply_bandpass": apply_bandpass,
+                "freqmin": freqmin,
+                "freqmax": freqmax,
+                "corners": corners,
+                "zerophase": zerophase,
+            } if apply_processing else None,
+        },
         "results": results,
     }
 
