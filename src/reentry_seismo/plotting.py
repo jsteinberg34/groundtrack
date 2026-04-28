@@ -88,16 +88,16 @@ def plot_track_and_boxes(track_points, box_windows=None, title="Track + Boxes"):
             if box.lon_min <= box.lon_max:
                 rect_lons = [box.lon_min, box.lon_max, box.lon_max, box.lon_min, box.lon_min]
                 rect_lats = [box.lat_min, box.lat_min, box.lat_max, box.lat_max, box.lat_min]
-                ax.plot(rect_lons, rect_lats, alpha=0.25)
+                ax.plot(rect_lons, rect_lats, alpha=0.6)
             else:
                 # dateline split
                 rect_lats = [box.lat_min, box.lat_min, box.lat_max, box.lat_max, box.lat_min]
 
                 rect_lons_1 = [-180.0, box.lon_max, box.lon_max, -180.0, -180.0]
                 rect_lons_2 = [box.lon_min, 180.0, 180.0, box.lon_min, box.lon_min]
-
-                ax.plot(rect_lons_1, rect_lats, alpha=0.25)
-                ax.plot(rect_lons_2, rect_lats, alpha=0.25)
+    
+                ax.plot(rect_lons_1, rect_lats, alpha=0.6)
+                ax.plot(rect_lons_2, rect_lats, alpha=0.6)
 
     extent = _compute_extent(track_points=track_points)
     ax.set_extent(extent, crs=ccrs.PlateCarree())
@@ -159,15 +159,15 @@ def plot_stations(
             if box.lon_min <= box.lon_max:
                 rect_lons = [box.lon_min, box.lon_max, box.lon_max, box.lon_min, box.lon_min]
                 rect_lats = [box.lat_min, box.lat_min, box.lat_max, box.lat_max, box.lat_min]
-                ax.plot(rect_lons, rect_lats, alpha=0.15)
+                ax.plot(rect_lons, rect_lats, alpha=0.6)
             else:
                 rect_lats = [box.lat_min, box.lat_min, box.lat_max, box.lat_max, box.lat_min]
 
                 rect_lons_1 = [-180.0, box.lon_max, box.lon_max, -180.0, -180.0]
                 rect_lons_2 = [box.lon_min, 180.0, 180.0, box.lon_min, box.lon_min]
 
-                ax.plot(rect_lons_1, rect_lats, alpha=0.15)
-                ax.plot(rect_lons_2, rect_lats, alpha=0.15)
+                ax.plot(rect_lons_1, rect_lats, alpha=0.6)
+                ax.plot(rect_lons_2, rect_lats, alpha=0.6)
 
     extent = _compute_extent(
         track_points=track_points,
@@ -218,8 +218,8 @@ def plot_station_comparison(
     fig = plt.figure(figsize=(12, 7))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
-    ax.scatter(all_lons, all_lats, s=10, alpha=0.5, label="All Downloaded Stations")
-    ax.scatter(filt_lons, filt_lats, s=14, alpha=0.9, label="Filtered Stations")
+    ax.scatter(all_lons, all_lats, s=18, alpha=0.6, label="Candidate Stations")
+    ax.scatter(filt_lons, filt_lats, s=22, alpha=0.9, label="Filtered Stations")
 
     if track_points:
         track_lats = [p.lat for p in track_points]

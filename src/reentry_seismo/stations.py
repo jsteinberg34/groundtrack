@@ -161,7 +161,6 @@ def load_and_filter_stations(
     boxes_root: str | Path,
     track_points,
     corridor_km: float = 100.0,
-    verbose: bool = True,
 ) -> dict:
     """
     Full convenience function for the current station-processing pipeline.
@@ -194,14 +193,6 @@ def load_and_filter_stations(
         track_points,
         corridor_km,
     )
-
-    if verbose:
-        print("StationXML files found:", len(xml_files))
-        print("Unique stations (downloaded candidates):", len(unique_stations))
-        print(
-            f"Stations within {corridor_km} km of track:",
-            f"{len(filtered_stations)} / {len(unique_stations)}"
-        )
 
     return {
         "xml_files": xml_files,
