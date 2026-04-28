@@ -26,3 +26,6 @@ download_old.py
 
 # Validation notebooks
 notebooks/
+
+# Basic smoke test file
+/test.py
