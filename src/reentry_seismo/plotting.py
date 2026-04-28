@@ -1,14 +1,27 @@
 from __future__ import annotations
 
 import numpy as np
-import matplotlib.pyplot as plt
-
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 
 from .geodesy import wrap_lon_deg
 from .stations import station_lats_lons
 
+# Check if user has optional plotting dependencies
+try:
+    import matplotlib.pyplot as plt
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    HAS_PLOTTING = True
+except ImportError:
+    HAS_PLOTTING = False
+
+
+# Function to check if plotting dependencies are available
+def _check_plotting_deps():
+    if not HAS_PLOTTING:
+        raise ImportError(
+            "Plotting requires matplotlib and cartopy. "
+            "Install them with: pip install reentry-seismo[plotting]"
+        )
 
 def _compute_extent(track_points=None, station_lats=None, station_lons=None, pad_deg=5.0):
     """
@@ -55,6 +68,8 @@ def plot_track_and_boxes(track_points, box_windows=None, title="Track + Boxes"):
         - Are boxes aligned with the track?
         - Are we covering the trajectory properly?
     """
+    _check_plotting_deps()
+    
     fig = plt.figure(figsize=(12, 7))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
@@ -119,6 +134,8 @@ def plot_stations(
 
     depending on what you pass in.
     """
+    _check_plotting_deps()
+
     st_lats, st_lons = station_lats_lons(stations)
 
     fig = plt.figure(figsize=(12, 7))
@@ -193,6 +210,8 @@ def plot_station_comparison(
     Blue = candidates
     Red = kept stations
     """
+    _check_plotting_deps()
+
     all_lats, all_lons = station_lats_lons(all_stations)
     filt_lats, filt_lons = station_lats_lons(filtered_stations)
 
