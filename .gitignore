@@ -20,3 +20,9 @@ env/
 # Data
 data/
 raw/
+
+# Old download file
+download_old.py
+
+# Validation notebooks
+notebooks/
