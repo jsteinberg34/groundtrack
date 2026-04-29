@@ -2,11 +2,20 @@
 name = "reentry-seismo"
 version = "0.1.0"
 description = "Seismic detection pipeline for orbital reentry events"
-authors = [{name="Joseph Steinberg"}]
+authors = [{name = "Joseph Steinberg", email = "jstein58@jh.edu"}]
+requires-python = ">=3.9"
+license = {text = "MIT"}
+readme = "README.md"
 
 dependencies = [
     "numpy",
-    "matplotlib",
     "obspy",
-    "skyfield"
+    "spacetrack",
+    "pandas",
+]
+
+[project.optional-dependencies]
+plotting = [
+    "matplotlib",
+    "cartopy",
 ]
