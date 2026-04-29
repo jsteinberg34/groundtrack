@@ -15,14 +15,14 @@
 <br />
 <div align="center">
   <a href="https://github.com/jsteinberg34/groundtrack">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+    <img src="Images/GroundtrackLogo.png" alt="Logo" width="80" height="80">
   </a>
 
 
   <h3 align="center">Groundtrack</h3>
 
   <p align="center">
-    Seismic detection pipeline for atmospheric re-entry events using orbital ground tracks and seismic station data.
+    Seismic waveform pipeline for atmospheric re-entry events using orbital ground tracks and seismic station data.
     <br />
     <br />
     <a href="#usage"><strong>Quick Start »</strong></a>
@@ -52,7 +52,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-Groundtrack is a Python library developed to assist with detecting and analyzing seismic signals that are produced when an object re-enters the atmosphere, building off the work of Dr. Fernando: <insert paper reference>. When space debris or a spacecraft re-enters the atmosphere at hypersonic speeds, they generate sonic booms that then couple into the ground and are recorded by seismic stations. Groundtrack automates the full pipeline from orbital data to the processed waveforms, while allowing each piece of the pipeline to be easily configured/called if the user wishes: 
+Groundtrack is a Python library developed for discovering and analyzing seismic signals that are produced when an object re-enters the atmosphere. When space debris or a spacecraft re-enters the atmosphere at hypersonic speeds, it generates sonic booms that then couple into the ground and are recorded by seismic stations. Groundtrack automates the full pipeline from orbital data to the processed waveforms, while allowing each piece of the pipeline to be easily configured/called if the user wishes: 
 
 1. Fetches TLE elements from Space-Track using a user-provided NORAD ID
 2. Propagates the ground track over a user-defined analysis window
@@ -61,7 +61,7 @@ Groundtrack is a Python library developed to assist with detecting and analyzing
 5. Applies instrument response removal and bandpass filtering
 6. Provides optional visualization tools for validating output
 
-The library was developed at Johns Hopkins University as independent research in collaboration with Dr. Benjamin Fernando (Department of Earth and Planetary Sciences), building on the methodology established in his work on seismic detection of the 2024 Shenzhou-15 re-entry (insert link to his research). The pipeline was first validated in multiple proof-of-concept notebooks replicating published detection results before being migrated into this library format.
+The library was developed at Johns Hopkins University as independent research in collaboration with Dr. Benjamin Fernando (Department of Earth and Planetary Sciences), building on the methodology established in his [work on seismic detection of the 2024 Shenzhou-15 re-entry](https://www.science.org/doi/10.1126/science.adz4676). The pipeline was first validated in multiple proof-of-concept Jupyter notebooks replicating published detection results before being migrated into this library format.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -69,13 +69,12 @@ The library was developed at Johns Hopkins University as independent research in
 
 ### Built With
 
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
-
 * [![Python][Python]][Python-url]
 * [![NumPy][NumPy]][NumPy-url]
 * [![ObsPy][ObsPy]][ObsPy-url]
 * [![pandas][pandas]][pandas-url]
 * [![Space-Track][SpaceTrack]][SpaceTrack-url]
+* [![Skyfield][Skyfield]][Skyfield-url]
 
 
 
@@ -123,11 +122,17 @@ pip install groundtrack[plotting]
 
 ### Credentials
 
-Groundtrack requires Space-Track credentials to fetch orbital data. Set them as environment variables:
+Groundtrack requires Space-Track credentials to fetch orbital data. Create a `.env` file in your project root:
+
+```
+SPACETRACK_USER=your_email@example.com
+SPACETRACK_PASS=your_password
+```
+
+Add `.env` to your `.gitignore` to avoid accidentally committing credentials:
 
 ```bash
-export SPACETRACK_USER="your_email@example.com"
-export SPACETRACK_PASS="your_password"
+echo ".env" >> .gitignore
 ```
 
 Or pass them directly to `run_pipeline()`:
@@ -191,7 +196,7 @@ results = run_pipeline(
     norad_id=56873,
     start="2024-04-02T08:40:00Z",
     end="2024-04-02T09:00:00Z",
-    cache_dir="data/cache",
+    cache_dir="data/cache",       # TLEs are cached here to avoid redundant Space-Track requests
     output_dir="data/outputs",
     event_name="shenzhou15_reentry",
 )
@@ -235,15 +240,19 @@ plot_all_waveforms(
 <!-- ROADMAP -->
 ## Roadmap
 
+- [x] Validated against Shenzhou-15 re-entry event
+- [x] Space-Track TLE fetching with local caching
 - [x] Orbital propagation and ground track tiling
-- [x] FDSN station discovery with 100 km corridor filter
+- [x] FDSN station discovery with 100 km corridor filter (configurable)
 - [x] MassDownloader-based waveform acquisition
 - [x] Instrument response removal and bandpass filtering
 - [x] Visualization utilities
 - [ ] Automated test suite
 - [ ] Full documentation site
-- [ ] Parallelized inventory queries for full-orbit runs
-- [ ] ML classification of seismic station data
+- [ ] Parallelized station queries for full-orbit passes
+- [ ] Automated sonic boom detection and classification
+- [ ] Trajectory reconstruction from detection results
+- [ ] Live re-entry support with real-time orbital data updates
 
 See the [open issues](https://github.com/jsteinberg34/groundtrack/issues) for a full list of proposed features and known issues.
 
@@ -286,11 +295,12 @@ Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/j
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-- [Dr. Benjamin Fernando](https://eps.jhu.edu) — Johns Hopkins University, Department of Earth and Planetary Sciences. Scientific methodology and validation.
-- [ObsPy](https://docs.obspy.org/) — Core seismic data library
-- [Skyfield](https://rhodesmill.org/skyfield/) — Orbital propagation
-- [Space-Track](https://www.space-track.org) — TLE and TIP message data
-- [Ed Williams' Aviation Formulary](http://www.edwilliams.org/avform147.htm) — Cross-track distance formula
+- [Dr. Benjamin Fernando](https://eps.jhu.edu/directory/benjamin-fernando/) - Johns Hopkins University, Department of Earth and Planetary Sciences. Scientific methodology and validation.
+- [ObsPy](https://docs.obspy.org/) - Core seismic data library
+- [Skyfield](https://rhodesmill.org/skyfield/) - Orbital propagation
+- [Space-Track](https://www.space-track.org) - TLE and TIP message data
+- [Cartopy](https://scitools.org.uk/cartopy/docs/latest/) - Map visualization
+- [Ed Williams' Aviation Formulary](http://www.edwilliams.org/avform147.htm) - Spherical cross-track distance formula
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -307,7 +317,6 @@ Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/j
 [license-url]: https://github.com/jsteinberg34/groundtrack/blob/main/LICENSE
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/joey-steinberg/
-[product-screenshot]: images/screenshot.png
 [Python]: https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python
 [Python-url]: https://www.python.org/
 [NumPy]: https://img.shields.io/badge/numpy-%23013243.svg?style=for-the-badge&logo=numpy
@@ -327,3 +336,6 @@ Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/j
 
 [cartopy]: https://img.shields.io/badge/cartopy-mapping-green?style=for-the-badge
 [cartopy-url]: https://scitools.org.uk/cartopy/docs/latest/
+
+[Skyfield]: https://img.shields.io/badge/Skyfield-orbital%20propagation-blue?style=for-the-badge
+[Skyfield-url]: https://rhodesmill.org/skyfield/
