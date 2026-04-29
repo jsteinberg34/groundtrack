@@ -196,13 +196,22 @@ def process_stream(
         # ---- Stage 3: bandpass ----
         if apply_bandpass:
             try:
-                tr_work.filter(
-                    "bandpass",
-                    freqmin=freqmin,
-                    freqmax=freqmax,
-                    corners=corners,
-                    zerophase=zerophase,
-                )
+                nyquist = tr_work.stats.sampling_rate / 2.0
+                effective_freqmax = min(freqmax, 0.9 * nyquist)
+
+                if effective_freqmax <= freqmin:
+                    if verbose:
+                        print(f"    [skip bandpass] {tr_id}: effective freqmax "
+                              f"{effective_freqmax:.1f} Hz <= freqmin {freqmin} Hz "
+                              f"for sampling rate {tr_work.stats.sampling_rate} Hz")
+                else:
+                    tr_work.filter(
+                        "bandpass",
+                        freqmin=freqmin,
+                        freqmax=effective_freqmax,
+                        corners=corners,
+                        zerophase=zerophase,
+                    )
             except Exception as e:
                 msg = f"bandpass failed: {repr(e)}"
                 errors.append({"trace_id": tr_id, "stage": "bandpass", "error": msg})
