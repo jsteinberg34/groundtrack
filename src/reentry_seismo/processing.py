@@ -18,13 +18,12 @@ from obspy.core.inventory import Inventory
 # where they are easy to find and audit.
 #
 # pre_filt notes:
-#   Dr. Fernando prefers to avoid a pre_filter "if possible." In practice
-#   the deconvolution inside remove_response is numerically unstable at the
-#   frequency extremes without some shaping, and the validated tuple below
-#   brackets the 1–20 Hz analysis band cleanly. Users who want the pure
-#   approach can pass pre_filt=None to skip it entirely.
+#   Upper corners are computed dynamically per trace as 90/95% of the
+#   trace's Nyquist frequency (sampling_rate / 2), preserving as much
+#   high-frequency information as the station allows. Lower corners are
+#   fixed via DEFAULT_PRE_FILT_LOW. Pass pre_filt_low=None to skip the
+#   pre-filter entirely.
 #
-DEFAULT_PRE_FILT = (0.5, 0.8, 25.0, 30.0)
 DEFAULT_WATER_LEVEL = 60
 DEFAULT_OUTPUT = "VEL"          # velocity in m/s, matches Dr. Fernando's paper
 DEFAULT_TAPER_PCT = 0.05
@@ -32,6 +31,13 @@ DEFAULT_FREQMIN = 1.0
 DEFAULT_FREQMAX = 20.0
 DEFAULT_CORNERS = 4
 DEFAULT_ZEROPHASE = False
+
+# Lower two corners are fixed defaults. Upper two corners (f3, f4) are
+# computed dynamically per trace as 90/95% of each trace's Nyquist frequency,
+# preserving as much high-frequency information as the station allows.
+# Dr. Fernando: "preserve as much information as possible - don't throw away
+# high frequencies for stations that have them."
+DEFAULT_PRE_FILT_LOW = (0.5, 0.8)  # lower corners only - upper computed per trace
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +100,7 @@ def process_stream(
     taper_pct: float = DEFAULT_TAPER_PCT,
     # Response removal
     output: str = DEFAULT_OUTPUT,
-    pre_filt: tuple[float, float, float, float] | None = DEFAULT_PRE_FILT,
+    pre_filt_low: tuple[float, float] | None = DEFAULT_PRE_FILT_LOW,
     water_level: float = DEFAULT_WATER_LEVEL,
     # Bandpass (after response removal)
     apply_bandpass: bool = True,
@@ -156,13 +162,28 @@ def process_stream(
             if verbose:
                 print(f"    [skip] {tr_id}: {msg}")
             continue
-
+        
         # ---- Stage 2: response removal ----
         try:
+            # Compute upper pre_filt corners dynamically from this trace's
+            # sampling rate. This preserves as much high-frequency information
+            # as the station allows rather than hardcoding a fixed cutoff.
+            # Lower corners stay fixed; upper corners are 90/95% of Nyquist.
+            if pre_filt_low is not None:
+                nyquist = tr_work.stats.sampling_rate / 2.0
+                pre_filt = (
+                    pre_filt_low[0],
+                    pre_filt_low[1],
+                    0.90 * nyquist,
+                    0.95 * nyquist,
+                )
+            else:
+                pre_filt = None
+
             tr_work.remove_response(
                 inventory=inventory,
                 output=output,
-                pre_filt=pre_filt,   # None is legal -> skips the pre-filter
+                pre_filt=pre_filt,
                 water_level=water_level,
             )
         except Exception as e:
@@ -206,7 +227,7 @@ def process_box(
     taper_pct: float = DEFAULT_TAPER_PCT,
     # Response removal
     output: str = DEFAULT_OUTPUT,
-    pre_filt: tuple[float, float, float, float] | None = DEFAULT_PRE_FILT,
+    pre_filt_low: tuple[float, float] | None = DEFAULT_PRE_FILT_LOW,
     water_level: float = DEFAULT_WATER_LEVEL,
     # Bandpass
     apply_bandpass: bool = True,
@@ -299,7 +320,7 @@ def process_box(
             detrend_linear=detrend_linear,
             taper_pct=taper_pct,
             output=output,
-            pre_filt=pre_filt,
+            pre_filt_low=pre_filt_low,
             water_level=water_level,
             apply_bandpass=apply_bandpass,
             freqmin=freqmin,
@@ -352,7 +373,7 @@ def process_boxes(
     taper_pct: float = DEFAULT_TAPER_PCT,
     # Response removal
     output: str = DEFAULT_OUTPUT,
-    pre_filt: tuple[float, float, float, float] | None = DEFAULT_PRE_FILT,
+    pre_filt_low: tuple[float, float] | None = DEFAULT_PRE_FILT_LOW,
     water_level: float = DEFAULT_WATER_LEVEL,
     # Bandpass
     apply_bandpass: bool = True,
@@ -413,7 +434,7 @@ def process_boxes(
             detrend_linear=detrend_linear,
             taper_pct=taper_pct,
             output=output,
-            pre_filt=pre_filt,
+            pre_filt_low=pre_filt_low,
             water_level=water_level,
             apply_bandpass=apply_bandpass,
             freqmin=freqmin,
@@ -438,7 +459,7 @@ def process_boxes(
             "detrend_linear": detrend_linear,
             "taper_pct": taper_pct,
             "output": output,
-            "pre_filt": list(pre_filt) if pre_filt is not None else None,
+            "pre_filt_low": list(pre_filt_low) if pre_filt_low is not None else None,
             "water_level": water_level,
             "apply_bandpass": apply_bandpass,
             "freqmin": freqmin,

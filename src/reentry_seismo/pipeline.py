@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .processing import (
-    DEFAULT_PRE_FILT,
+    DEFAULT_PRE_FILT_LOW,
     DEFAULT_WATER_LEVEL,
     DEFAULT_OUTPUT,
     DEFAULT_TAPER_PCT,
@@ -61,7 +61,7 @@ def run_pipeline(
     detrend_linear: bool = True,
     taper_pct: float = DEFAULT_TAPER_PCT,
     output: str = DEFAULT_OUTPUT,
-    pre_filt: tuple | None = DEFAULT_PRE_FILT,
+    pre_filt_low: tuple[float, float] | None = DEFAULT_PRE_FILT_LOW,
     water_level: float = DEFAULT_WATER_LEVEL,
     apply_bandpass: bool = True,
     freqmin: float = DEFAULT_FREQMIN,
@@ -171,7 +171,7 @@ def run_pipeline(
         detrend_linear=detrend_linear,
         taper_pct=taper_pct,
         output=output,
-        pre_filt=pre_filt,
+        pre_filt_low=pre_filt_low,
         water_level=water_level,
         apply_bandpass=apply_bandpass,
         freqmin=freqmin,
