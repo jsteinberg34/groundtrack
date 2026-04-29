@@ -1,5 +1,5 @@
 """
-reentry_seismo
+groundtrack
 
 Tools for discovering seismic signals from atmospheric re-entry events
 using orbital ground tracks and seismic station data.

@@ -21,7 +21,7 @@ def _check_plotting_deps():
     if not HAS_PLOTTING:
         raise ImportError(
             "Plotting requires matplotlib and cartopy. "
-            "Install them with: pip install reentry-seismo[plotting]"
+            "Install them with: pip install groundtrack[plotting]"
         )
 
 def _compute_extent(track_points=None, station_lats=None, station_lons=None, pad_deg=5.0):
