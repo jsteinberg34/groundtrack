@@ -1,25 +1,8 @@
 # Groundtrack
 
-<!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
 <a name="readme-top"></a>
-<!--
-*** Thanks for checking out the Best-README-Template. If you have a suggestion
-*** that would make this better, please fork the repo and create a pull request
-*** or simply open an issue with the tag "enhancement".
-*** Don't forget to give the project a star!
-*** Thanks again! Now go create something AMAZING! :D
--->
-
-
 
 <!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
-*** See the bottom of this document for the declaration of the reference variables
-*** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
-*** https://www.markdownguide.org/basic-syntax/#reference-style-links
--->
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -28,49 +11,35 @@
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
 
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/othneildrew/Best-README-Template">
+  <a href="https://github.com/jsteinberg34/groundtrack">
     <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
+
 
   <h3 align="center">Groundtrack</h3>
 
   <p align="center">
-    An awesome README template to jumpstart your projects!
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
+    Seismic detection pipeline for atmospheric re-entry events using orbital ground tracks and seismic station data.
     <br />
     <br />
-    <a href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
+    <a href="#usage"><strong>Quick Start »</strong></a>
     ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Report Bug</a>
+    <a href="https://github.com/jsteinberg34/groundtrack/issues">Report Bug</a>
     ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Request Feature</a>
+    <a href="https://github.com/jsteinberg34/groundtrack/issues">Request Feature</a>
   </p>
 </div>
-
-
 
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
   <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
+    <li><a href="#about-the-project">About The Project</a></li>
+    <li><a href="#built-with">Built With</a></li>
+    <li><a href="#getting-started">Getting Started</a></li>
     <li><a href="#usage">Usage</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
@@ -80,21 +49,19 @@
   </ol>
 </details>
 
-
-
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+Groundtrack is a Python library developed to assist with detecting and analyzing seismic signals that are produced when an object re-enters the atmosphere, building off the work of Dr. Fernando: <insert paper reference>. When space debris or a spacecraft re-enters the atmosphere at hypersonic speeds, they generate sonic booms that then couple into the ground and are recorded by seismic stations. Groundtrack automates the full pipeline from orbital data to the processed waveforms, while allowing each piece of the pipeline to be easily configured/called if the user wishes: 
 
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
+1. Fetches TLE elements from Space-Track using a user-provided NORAD ID
+2. Propagates the ground track over a user-defined analysis window
+3. Tiles the track into spatial boxes and queries FDSN providers for any nearby seismic stations that fall within a given box
+4. Downloads waveform data for stations within a configurable distance from the ground track
+5. Applies instrument response removal and bandpass filtering
+6. Provides optional visualization tools for validating output
 
-Here's why:
-* Your time should be focused on creating something amazing. A project that solves a problem and helps others
-* You shouldn't be doing the same tasks over and over like creating a README from scratch
-* You should implement DRY principles to the rest of your life :smile:
-
-Of course, no one template will serve all projects since your needs may be different. So I'll be adding more in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue. Thanks to all the people have contributed to expanding this template!
+The library was developed at Johns Hopkins University as independent research in collaboration with Dr. Benjamin Fernando (Department of Earth and Planetary Sciences), building on the methodology established in his work on seismic detection of the 2024 Shenzhou-15 re-entry (insert link to his research). The pipeline was first validated in multiple proof-of-concept notebooks replicating published detection results before being migrated into this library format.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -114,85 +81,171 @@ This section should list any major frameworks/libraries used to bootstrap your p
 
 ### Optional Features
 
-#### Visualization Tools 
-
 Groundtrack includes built-in plotting utilities for analyzing re-entry events:
 
-- Ground track + download boxes
+- Ground track + download boxes visualization
 - Station distribution maps
-- Waveform comparisons across stations
+- Raw vs. processed waveform comparisons
 
 Install with plotting support:
 
 ```bash
 pip install groundtrack[plotting]
 ```
+
 * [![matplotlib][matplotlib]][matplotlib-url]
 * [![cartopy][cartopy]][cartopy-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
 ### Prerequisites
 
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
+- Python 3.10+
+- A free [Space-Track](https://www.space-track.org/auth/createAccount) account for TLE and TIP message access
 
 ### Installation
 
-_Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
+Install from PyPI:
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```sh
-   git clone https://github.com/your_username_/Project-Name.git
-   ```
-3. Install NPM packages
-   ```sh
-   npm install
-   ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
-   ```
+```bash
+pip install groundtrack
+```
+
+With optional plotting support:
+
+```bash
+pip install groundtrack[plotting]
+```
+
+### Credentials
+
+Groundtrack requires Space-Track credentials to fetch orbital data. Set them as environment variables:
+
+```bash
+export SPACETRACK_USER="your_email@example.com"
+export SPACETRACK_PASS="your_password"
+```
+
+Or pass them directly to `run_pipeline()`:
+
+```python
+results = run_pipeline(
+    ...,
+    username="your_email@example.com",
+    password="your_password",
+)
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+### Minimal Example
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+```python
+from groundtrack import run_pipeline
+
+results = run_pipeline(
+    norad_id=56873,
+    start="2024-04-02T08:40:00Z",
+    end="2024-04-02T09:00:00Z",
+    cache_dir="data/cache",
+    output_dir="data/outputs",
+    event_name="shenzhou15_reentry",
+)
+```
+
+### With Processing and Custom Parameters
+
+```python
+results = run_pipeline(
+    norad_id=56873,
+    start="2024-04-02T08:40:00Z",
+    end="2024-04-02T09:00:00Z",
+    cache_dir="data/cache",
+    output_dir="data/outputs",
+    event_name="shenzhou15_reentry",
+    corridor_km=100.0,          # station inclusion threshold
+    chunk_km=300.0,             # along-track box size
+    apply_processing=True,      # remove instrument response + bandpass
+    freqmin=1.0,                # bandpass lower corner (Hz)
+    freqmax=20.0,               # bandpass upper corner (Hz)
+)
+```
+
+### Two-Step Workflow
+
+Download first, process later with different parameters:
+
+```python
+from groundtrack import run_pipeline, process_boxes
+
+# Step 1 - download only
+results = run_pipeline(
+    norad_id=56873,
+    start="2024-04-02T08:40:00Z",
+    end="2024-04-02T09:00:00Z",
+    cache_dir="data/cache",
+    output_dir="data/outputs",
+    event_name="shenzhou15_reentry",
+)
+
+# Step 2 - process separately with custom settings
+process_boxes(
+    boxes_root=results["manifest"]["boxes_root"],
+    freqmin=1.0,
+    freqmax=10.0,
+)
+```
+
+### Visualization
+
+```python
+from groundtrack import (
+    plot_track_and_boxes,
+    plot_stations,
+    plot_all_waveforms,
+)
+from pathlib import Path
+
+# Plot ground track and download boxes
+plot_track_and_boxes(
+    track_points=results["track"]["track_points"],
+    box_windows=results["boxes"],
+)
+
+# Plot all processed waveforms for a specific box
+plot_all_waveforms(
+    boxes_root=Path(results["manifest"]["boxes_root"]),
+    box_ids="box_006",
+    t_start_utc="2024-04-02T08:44:00Z",
+    t_end_utc="2024-04-02T08:54:00Z",
+)
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- ROADMAP -->
 ## Roadmap
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
+- [x] Orbital propagation and ground track tiling
+- [x] FDSN station discovery with 100 km corridor filter
+- [x] MassDownloader-based waveform acquisition
+- [x] Instrument response removal and bandpass filtering
+- [x] Visualization utilities
+- [ ] Automated test suite
+- [ ] Full documentation site
+- [ ] Parallelized inventory queries for full-orbit runs
+- [ ] ML classification of seismic station data
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
+See the [open issues](https://github.com/jsteinberg34/groundtrack/issues) for a full list of proposed features and known issues.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -201,26 +254,30 @@ See the [open issues](https://github.com/othneildrew/Best-README-Template/issues
 <!-- CONTRIBUTING -->
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Contributions are welcome. If you have a suggestion or find a bug, please open an issue or submit a pull request.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork the project
+2. Create your feature branch (`git checkout -b feature/YourFeature`)
+3. Commit your changes (`git commit -m 'Add YourFeature'`)
+4. Push to the branch (`git push origin feature/YourFeature`)
+5. Open a pull request
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+Joseph Steinberg - [LinkedIn](https://www.linkedin.com/in/joey-steinberg/) - josephsteinberg933@gmail.com
 
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
+Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/jsteinberg34/groundtrack)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -229,23 +286,15 @@ Project Link: [https://github.com/your_username/repo_name](https://github.com/yo
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
-
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
+- [Dr. Benjamin Fernando](https://eps.jhu.edu) — Johns Hopkins University, Department of Earth and Planetary Sciences. Scientific methodology and validation.
+- [ObsPy](https://docs.obspy.org/) — Core seismic data library
+- [Skyfield](https://rhodesmill.org/skyfield/) — Orbital propagation
+- [Space-Track](https://www.space-track.org) — TLE and TIP message data
+- [Ed Williams' Aviation Formulary](http://www.edwilliams.org/avform147.htm) — Cross-track distance formula
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
 <!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 [contributors-shield]: https://img.shields.io/github/contributors/jsteinberg34/groundtrack.svg?style=for-the-badge
 [contributors-url]: https://github.com/jsteinberg34/groundtrack/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/jsteinberg34/groundtrack.svg?style=for-the-badge
