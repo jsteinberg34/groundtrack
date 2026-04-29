@@ -21,7 +21,7 @@ from .stations import (
 
 from .processing import (
     process_box,
-    DEFAULT_PRE_FILT,
+    DEFAULT_PRE_FILT_LOW,
     DEFAULT_WATER_LEVEL,
     DEFAULT_OUTPUT,
     DEFAULT_TAPER_PCT,
@@ -129,7 +129,7 @@ def download_boxes(
     taper_pct: float = DEFAULT_TAPER_PCT,
     # Response removal
     output: str = DEFAULT_OUTPUT,
-    pre_filt: tuple[float, float, float, float] | None = DEFAULT_PRE_FILT,
+    pre_filt_low: tuple[float, float] | None = DEFAULT_PRE_FILT_LOW,
     water_level: float = DEFAULT_WATER_LEVEL,
     # Bandpass (after response removal)
     apply_bandpass: bool = True,
@@ -323,7 +323,7 @@ def download_boxes(
                 detrend_linear=detrend_linear,
                 taper_pct=taper_pct,
                 output=output,
-                pre_filt=pre_filt,
+                pre_filt_low=pre_filt_low,
                 water_level=water_level,
                 apply_bandpass=apply_bandpass,
                 freqmin=freqmin,
@@ -362,7 +362,7 @@ def download_boxes(
                 "detrend_linear": detrend_linear,
                 "taper_pct": taper_pct,
                 "output": output,
-                "pre_filt": list(pre_filt) if pre_filt is not None else None,
+                "pre_filt_low": list(pre_filt_low) if pre_filt_low is not None else None,
                 "water_level": water_level,
                 "apply_bandpass": apply_bandpass,
                 "freqmin": freqmin,

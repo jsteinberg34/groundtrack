@@ -21,7 +21,7 @@ def _check_plotting_deps():
     if not HAS_PLOTTING:
         raise ImportError(
             "Plotting requires matplotlib and cartopy. "
-            "Install them with: pip install reentry-seismo[plotting]"
+            "Install them with: pip install groundtrack[plotting]"
         )
 
 def _compute_extent(track_points=None, station_lats=None, station_lons=None, pad_deg=5.0):
@@ -449,6 +449,8 @@ def plot_all_waveforms(
             t_raw = tr_raw.times("matplotlib")
             ax_raw.plot_date(t_raw, tr_raw.data, "-", linewidth=0.6)
             ax_raw.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+            ax_raw.xaxis.set_major_locator(mdates.AutoDateLocator())
+            plt.setp(ax_raw.xaxis.get_majorticklabels(), rotation=30, ha="right")
             ax_raw.set_ylabel("Counts")
         else:
             ax_raw.text(0.5, 0.5, "No raw data", ha="center", va="center",
@@ -461,6 +463,8 @@ def plot_all_waveforms(
             t_proc = tr_proc.times("matplotlib")
             ax_proc.plot_date(t_proc, tr_proc.data * 1e6, "-", linewidth=0.6, color="tab:orange")
             ax_proc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+            ax_proc.xaxis.set_major_locator(mdates.AutoDateLocator())
+            plt.setp(ax_proc.xaxis.get_majorticklabels(), rotation=30, ha="right")
             ax_proc.set_ylabel("Velocity (μm/s)")
         else:
             ax_proc.text(0.5, 0.5, "No processed file", ha="center", va="center",
