@@ -12,6 +12,7 @@ dependencies = [
     "obspy",
     "spacetrack",
     "pandas",
+    "skyfield",
 ]
 
 [project.optional-dependencies]
