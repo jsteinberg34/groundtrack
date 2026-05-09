@@ -12,10 +12,9 @@ from obspy.core.inventory import Inventory
 # Validated defaults
 # ---------------------------------------------------------------------------
 #
-# These defaults come from the single-waveform test notebook that reproduced
-# Dr. Fernando's figure for SMI/SEV during the Shenzhou-15 re-entry. Changing
-# them silently will change scientific results, so they live at module scope
-# where they are easy to find and audit.
+# These defaults were validated against the Shenzhou-15 re-entry event.
+# Changing them silently will change scientific results, so they live at
+# module scope where they are easy to find and audit.
 #
 # pre_filt notes:
 #   Upper corners are computed dynamically per trace as 90/95% of the
@@ -25,7 +24,7 @@ from obspy.core.inventory import Inventory
 #   pre-filter entirely.
 #
 DEFAULT_WATER_LEVEL = 60
-DEFAULT_OUTPUT = "VEL"          # velocity in m/s, matches Dr. Fernando's paper
+DEFAULT_OUTPUT = "VEL"          # velocity in m/s; validated against Shenzhou-15 re-entry
 DEFAULT_TAPER_PCT = 0.05
 DEFAULT_FREQMIN = 1.0
 DEFAULT_FREQMAX = 20.0
@@ -35,8 +34,6 @@ DEFAULT_ZEROPHASE = False
 # Lower two corners are fixed defaults. Upper two corners (f3, f4) are
 # computed dynamically per trace as 90/95% of each trace's Nyquist frequency,
 # preserving as much high-frequency information as the station allows.
-# Dr. Fernando: "preserve as much information as possible - don't throw away
-# high frequencies for stations that have them."
 DEFAULT_PRE_FILT_LOW = (0.5, 0.8)  # lower corners only - upper computed per trace
 
 

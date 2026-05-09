@@ -11,7 +11,11 @@ from obspy.geodetics import (
 def wrap_lon_deg(lon: float) -> float:
     return (lon + 180.0) % 360.0 - 180.0
 
-
+# A station whose nearest sampled track point is just outside the corridor
+# threshold may still be within it -- its true closest approach lies between
+# two sampled points. For stations within this band of the threshold, we
+# compute the true cross-track arc distance to neighboring segments to check
+# whether the station actually falls inside the corridor.
 _AMBIGUOUS_BAND_KM = 10.0
 
 def min_distance_km_to_track(
