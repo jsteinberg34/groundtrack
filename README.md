@@ -9,6 +9,8 @@
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
+[![Documentation](https://readthedocs.org/projects/groundtrack/badge/?version=latest&style=for-the-badge)](https://groundtrack.readthedocs.io/en/latest/)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20100697-blue?style=for-the-badge)](https://doi.org/10.5281/zenodo.20100696)
 
 
 <!-- PROJECT LOGO -->
@@ -248,7 +250,7 @@ plot_all_waveforms(
 - [x] Instrument response removal and bandpass filtering
 - [x] Visualization utilities
 - [ ] Automated test suite
-- [ ] Full documentation site
+- [x] Full documentation site
 - [ ] Parallelized station queries for full-orbit passes
 - [ ] Automated sonic boom detection and classification
 - [ ] Trajectory reconstruction from detection results
