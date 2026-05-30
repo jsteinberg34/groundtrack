@@ -1,0 +1,61 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: groundtrack
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Joseph
+    family-names: Steinberg
+    email: jstein58@jh.edu
+    affiliation: Johns Hopkins University
+    orcid: 'https://orcid.org/0009-0007-3631-4078'
+  - orcid: 'https://orcid.org/0000-0002-7321-8401'
+    given-names: Benjamin
+    family-names: Fernando
+    affiliation: Los Alamos National Laboratory
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.20100696
+repository-code: 'https://github.com/jsteinberg34/groundtrack'
+url: 'https://groundtrack.readthedocs.io'
+repository-artifact: 'https://pypi.org/project/groundtrack'
+abstract: >-
+  groundtrack is an open-source Python library for seismic
+  waveform acquisition and processing for atmospheric
+  re-entry events. It automates the full pipeline from
+  orbital TLE retrieval to processed seismic waveforms,
+  enabling systematic analysis of space debris re-entry
+  trajectories and fragmentation dynamics.
+keywords:
+  - space debris
+  - atmospheric re-entry
+  - seismology
+  - seismic detection
+  - sonic boom
+  - ground track
+  - ObsPy
+  - Python
+  - waveform processing
+  - FDSN
+  - SGP4
+license: MIT
+version: 0.1.1
+date-released: '2026-05-09'
+references:
+  - type: article
+    title: "Reentry and disintegration dynamics of space debris tracked using seismic data"
+    authors:
+      - family-names: Fernando
+        given-names: Benjamin
+      - family-names: Charalambous
+        given-names: Constantinos
+    journal: Science
+    volume: 391
+    issue: 6783
+    pages: "412-416"
+    year: 2026
+    doi: 10.1126/science.adz4676
