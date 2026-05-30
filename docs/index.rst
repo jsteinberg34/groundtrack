@@ -5,6 +5,8 @@ groundtrack
 
 The library was developed at Johns Hopkins University in collaboration with Dr. Benjamin Fernando (Department of Earth and Planetary Sciences) and was validated against the `Shenzhou-15 re-entry event <https://doi.org/10.1126/science.adz4676>`_, reproducing published results from a peer-reviewed *Science* paper.
 
+Source code is available on `GitHub <https://github.com/jsteinberg34/groundtrack>`_.
+
 .. code-block:: bash
 
    pip install groundtrack
@@ -49,6 +51,8 @@ The library was developed at Johns Hopkins University in collaboration with Dr. 
    :maxdepth: 1
    :caption: About
 
+   contributing
+   license
    changelog
 
 Indices and tables
