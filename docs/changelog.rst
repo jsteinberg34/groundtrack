@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.1.1 (2026-05-21)
+0.1.1 (2026-05-09)
 ------------------
 
 Initial public release.
@@ -13,3 +13,11 @@ Initial public release.
 - Instrument response removal and bandpass filtering
 - Visualization utilities (requires ``[plotting]`` extras)
 - Validated against the Shenzhou-15 re-entry event (NORAD ID 56873)
+
+0.1.2 (2026-05-30)
+------------------
+
+- Added full Sphinx documentation hosted on Read the Docs
+- Added CITATION.cff for software citation
+- Added contributing and license pages to documentation
+- Connected GitHub Actions workflow for automated PyPI publishing
