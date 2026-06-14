@@ -11,6 +11,8 @@
 [![LinkedIn][linkedin-shield]][linkedin-url]
 [![Documentation](https://readthedocs.org/projects/groundtrack/badge/?version=latest&style=for-the-badge)](https://groundtrack.readthedocs.io/en/latest/)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20100697-blue?style=for-the-badge)](https://doi.org/10.5281/zenodo.20100696)
+[![CI](https://img.shields.io/github/actions/workflow/status/jsteinberg34/groundtrack/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/jsteinberg34/groundtrack/actions/workflows/ci.yml)
+[![codecov](https://img.shields.io/codecov/c/github/jsteinberg34/groundtrack?style=for-the-badge)](https://codecov.io/gh/jsteinberg34/groundtrack)
 
 
 <!-- PROJECT LOGO -->
@@ -272,6 +274,26 @@ Contributions are welcome. If you have a suggestion or find a bug, please open a
 3. Commit your changes (`git commit -m 'Add YourFeature'`)
 4. Push to the branch (`git push origin feature/YourFeature`)
 5. Open a pull request
+
+### Running the tests
+
+The test suite covers the pure geometry and data modules (`geodesy`, `tiling`,
+`types`) and requires no network access or external data. Install the test
+extras and run pytest:
+
+```sh
+pip install -e ".[test]"
+pytest
+```
+
+To see a coverage report for the package:
+
+```sh
+pytest --cov=groundtrack --cov-report=term-missing
+```
+
+Every push and pull request runs the suite on Python 3.10 and 3.13 via GitHub
+Actions, and coverage is reported to Codecov.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
