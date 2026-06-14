@@ -20,3 +20,18 @@ plotting = [
     "matplotlib",
     "cartopy",
 ]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["groundtrack"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
