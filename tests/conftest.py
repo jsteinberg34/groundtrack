@@ -9,6 +9,7 @@ tests -- again with no network and no real waveform data.
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,6 +17,7 @@ import pytest
 from obspy import Stream, Trace, UTCDateTime
 from obspy.core.inventory import Channel, Inventory, Network, Site, Station
 from obspy.core.inventory.response import Response
+from skyfield.api import load
 
 from groundtrack.types import TrackPoint
 
@@ -211,3 +213,35 @@ def make_box_dir(make_trace, synthetic_inventory):
         return box_dir
 
     return build
+
+
+# --------------------------------------------------------------------------- #
+# Fixtures for the Shenzhou-15 regression and track/io tests
+# --------------------------------------------------------------------------- #
+
+# Decoded epoch of the committed Shenzhou-15 TLE (independent of the analysis
+# window, which starts ~3 hours later).
+SHENZHOU15_TLE_EPOCH_UTC = "2024-04-02T05:50:34Z"
+
+
+def fixtures_dir() -> Path:
+    """Absolute path to tests/fixtures, resolved relative to this file."""
+    return Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _offline_timescale():
+    """
+    Pre-warm Skyfield's builtin timescale so any implicit ``load.timescale()``
+    call (e.g. inside ``build_satellite_from_tle``) uses bundled data and never
+    attempts a network/file download. Keeps the suite hermetic.
+    """
+    load.timescale(builtin=True)
+
+
+@pytest.fixture
+def shenzhou15_tle():
+    """The validated Shenzhou-15 TLE as a ``(line1, line2)`` tuple."""
+    text = (fixtures_dir() / "shenzhou15.tle").read_text(encoding="utf-8")
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return lines[0], lines[1]
