@@ -32,6 +32,10 @@ addopts = "-ra"
 [tool.coverage.run]
 source = ["groundtrack"]
 branch = true
+# plotting.py is an optional visualization extra (pip install groundtrack[plotting]);
+# its matplotlib/cartopy deps are not installed in CI, so it is excluded from
+# coverage. Its only pure logic (_compute_extent) is still unit-tested.
+omit = ["*/plotting.py"]
 
 [tool.coverage.report]
 show_missing = true
