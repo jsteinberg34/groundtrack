@@ -109,6 +109,55 @@ def make_stream(make_trace):
     return build
 
 
+def _build_synthetic_inventory(
+    network="XX",
+    station="ABC",
+    channel="BHZ",
+    sampling_rate=100.0,
+    latitude=0.0,
+    longitude=0.0,
+):
+    """
+    Build a minimal poles/zeros Inventory whose response can be removed.
+    Module-level so the fake clients (below) can reuse it.
+    """
+    resp = Response.from_paz(
+        zeros=[0j, 0j],
+        poles=[-0.037 - 0.037j, -0.037 + 0.037j, -250 + 0j],
+        stage_gain=1.0,
+        stage_gain_frequency=1.0,
+        input_units="M/S",
+        output_units="COUNTS",
+        normalization_frequency=1.0,
+        normalization_factor=1.0,
+    )
+    resp.instrument_sensitivity.value = 1.0
+    resp.instrument_sensitivity.frequency = 1.0
+    resp.instrument_sensitivity.input_units = "M/S"
+    resp.instrument_sensitivity.output_units = "COUNTS"
+
+    cha = Channel(
+        code=channel,
+        location_code="",
+        latitude=latitude,
+        longitude=longitude,
+        elevation=0.0,
+        depth=0.0,
+        sample_rate=sampling_rate,
+        response=resp,
+    )
+    sta = Station(
+        code=station,
+        latitude=latitude,
+        longitude=longitude,
+        elevation=0.0,
+        channels=[cha],
+        site=Site(name="synthetic"),
+    )
+    net = Network(code=network, stations=[sta])
+    return Inventory(networks=[net], source="groundtrack-tests")
+
+
 @pytest.fixture
 def synthetic_inventory():
     """
@@ -118,44 +167,7 @@ def synthetic_inventory():
     ``make_trace`` so the trace and inventory match out of the box. Validated
     to make ``Trace.remove_response(output="VEL")`` succeed.
     """
-    def build(network="XX", station="ABC", channel="BHZ", sampling_rate=100.0):
-        resp = Response.from_paz(
-            zeros=[0j, 0j],
-            poles=[-0.037 - 0.037j, -0.037 + 0.037j, -250 + 0j],
-            stage_gain=1.0,
-            stage_gain_frequency=1.0,
-            input_units="M/S",
-            output_units="COUNTS",
-            normalization_frequency=1.0,
-            normalization_factor=1.0,
-        )
-        resp.instrument_sensitivity.value = 1.0
-        resp.instrument_sensitivity.frequency = 1.0
-        resp.instrument_sensitivity.input_units = "M/S"
-        resp.instrument_sensitivity.output_units = "COUNTS"
-
-        cha = Channel(
-            code=channel,
-            location_code="",
-            latitude=0.0,
-            longitude=0.0,
-            elevation=0.0,
-            depth=0.0,
-            sample_rate=sampling_rate,
-            response=resp,
-        )
-        sta = Station(
-            code=station,
-            latitude=0.0,
-            longitude=0.0,
-            elevation=0.0,
-            channels=[cha],
-            site=Site(name="synthetic"),
-        )
-        net = Network(code=network, stations=[sta])
-        return Inventory(networks=[net], source="groundtrack-tests")
-
-    return build
+    return _build_synthetic_inventory
 
 
 @pytest.fixture
@@ -245,3 +257,105 @@ def shenzhou15_tle():
     text = (fixtures_dir() / "shenzhou15.tle").read_text(encoding="utf-8")
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     return lines[0], lines[1]
+
+
+# --------------------------------------------------------------------------- #
+# Fake clients for the network/orchestration tests (Phase 4)
+#
+# These replace the real obspy/spacetrack network seams via monkeypatch so the
+# acquisition pipeline runs offline. They are deliberately faithful to the real
+# call shapes: download_boxes WRITES the get_stations inventory to STATIONXML
+# and re-reads it, and MassDownloader.download drives a real storage callback
+# that must create files on disk.
+# --------------------------------------------------------------------------- #
+
+def _build_station_inventory(stations):
+    """Build a station-level Inventory from ``[(net, sta, lat, lon), ...]``."""
+    by_net: dict[str, list] = {}
+    for net, sta, lat, lon in stations:
+        by_net.setdefault(net, []).append(
+            Station(
+                code=sta,
+                latitude=lat,
+                longitude=lon,
+                elevation=0.0,
+                site=Site(name="synthetic"),
+            )
+        )
+    networks = [Network(code=n, stations=stas) for n, stas in by_net.items()]
+    return Inventory(networks=networks, source="groundtrack-tests")
+
+
+def _write_min_mseed(path, network, station, channel):
+    """Write a small synthetic MiniSEED file at ``path``."""
+    tr = Trace(data=np.zeros(600, dtype=np.float32))
+    tr.stats.network = network
+    tr.stats.station = station
+    tr.stats.location = ""
+    tr.stats.channel = channel
+    tr.stats.sampling_rate = 100.0
+    tr.stats.starttime = TRACE_START
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    Stream([tr]).write(str(p), format="MSEED")
+
+
+class FakeFDSNClient:
+    """Stand-in for obspy's FDSN ``Client``. ``get_stations`` returns a
+    station-level Inventory built from the configured stations."""
+
+    def __init__(self, stations):
+        # stations: list of (network, station, lat, lon)
+        self._stations = stations
+
+    def get_stations(self, **kwargs):
+        return _build_station_inventory(self._stations)
+
+
+class FakeMassDownloader:
+    """Stand-in for obspy's ``MassDownloader``. ``download`` drives the real
+    ``mseed_storage`` callback (creating files) and writes per-station
+    StationXML using the ``stationxml_storage`` template string."""
+
+    def __init__(self, providers=None):
+        self.providers = providers
+
+    def download(self, domain, restrictions, mseed_storage=None, stationxml_storage=None):
+        networks = [n for n in (restrictions.network or "").split(",") if n]
+        stations = [s for s in (restrictions.station or "").split(",") if s]
+        channels = list(restrictions.channel_priorities) or ["HHZ"]
+        channel = channels[0]
+
+        for net in networks:
+            for sta in stations:
+                # The approval gate inside _make_mseed_storage returns None for
+                # any (net, sta) not approved -> those are skipped here.
+                path = mseed_storage(
+                    net, sta, "", channel,
+                    restrictions.starttime, restrictions.endtime,
+                )
+                if not path:
+                    continue
+                _write_min_mseed(path, net, sta, channel)
+
+                if stationxml_storage:
+                    xml_path = (
+                        str(stationxml_storage)
+                        .replace("{network}", net)
+                        .replace("{station}", sta)
+                    )
+                    Path(xml_path).parent.mkdir(parents=True, exist_ok=True)
+                    _build_synthetic_inventory(net, sta, channel).write(
+                        xml_path, format="STATIONXML"
+                    )
+
+
+class FakeSpaceTrack:
+    """Stand-in for ``SpaceTrackClient``. ``gp_history`` returns canned TLE
+    text (a multi-line string)."""
+
+    def __init__(self, tle_text):
+        self._tle_text = tle_text
+
+    def gp_history(self, **kwargs):
+        return self._tle_text

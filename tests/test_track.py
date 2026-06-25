@@ -4,11 +4,13 @@ Unit tests for the network-free surface of groundtrack.track.
 Covers TLE parsing, cache-key construction, satellite building, deterministic
 propagation and its guard clauses, dataframe->points conversion, the cache-hit
 branch of fetch_tle_best_before_cached, and the missing-credentials guard of
-load_spacetrack_client. The live Space-Track query and build_track_from_norad
-are out of scope (network).
+load_spacetrack_client. The Space-Track network branch (cache-miss query and
+build_track_from_norad) is covered here too via a faked client -- still no
+network.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -19,11 +21,12 @@ from groundtrack.track import (
     propagate_satellite_to_dataframe,
     dataframe_to_track_points,
     fetch_tle_best_before_cached,
+    build_track_from_norad,
     load_spacetrack_client,
 )
 from groundtrack.types import TrackPoint
 
-from conftest import SHENZHOU15_TLE_EPOCH_UTC
+from conftest import SHENZHOU15_TLE_EPOCH_UTC, FakeSpaceTrack
 
 
 # --------------------------------------------------------------------------- #
@@ -206,3 +209,47 @@ def test_load_spacetrack_client_requires_credentials(monkeypatch):
     monkeypatch.delenv("SPACETRACK_PASS", raising=False)
     with pytest.raises(ValueError):
         load_spacetrack_client()
+
+
+# --------------------------------------------------------------------------- #
+# Network branch via a faked Space-Track client (no network)
+# --------------------------------------------------------------------------- #
+
+def test_fetch_tle_cache_miss_queries_and_caches(tmp_path, shenzhou15_tle):
+    l1, l2 = shenzhou15_tle
+    fake = FakeSpaceTrack(f"{l1}\n{l2}\n")
+    t = datetime(2024, 4, 2, 8, 40, 0, tzinfo=timezone.utc)
+
+    # Fresh tmp_path -> cache miss -> queries the (faked) client and caches.
+    r1, r2, cache_path = fetch_tle_best_before_cached(
+        fake, 56873, t, tmp_path, lookback_days=7
+    )
+
+    assert (r1, r2) == (l1, l2)
+    assert Path(cache_path).exists()
+    cached_lines = Path(cache_path).read_text(encoding="utf-8").splitlines()
+    assert [ln for ln in cached_lines if ln.strip()] == [l1, l2]
+
+
+def test_build_track_from_norad_wires_front_end(tmp_path, monkeypatch, shenzhou15_tle):
+    l1, l2 = shenzhou15_tle
+    fake = FakeSpaceTrack(f"{l1}\n{l2}\n")
+    monkeypatch.setattr(
+        "groundtrack.track.load_spacetrack_client",
+        lambda username=None, password=None: fake,
+    )
+
+    start = datetime(2024, 4, 2, 8, 40, 0, tzinfo=timezone.utc)
+    end = datetime(2024, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+
+    result = build_track_from_norad(
+        56873, start, end, tmp_path, lookback_days=7, step_seconds=1
+    )
+
+    assert {
+        "line1", "line2", "cache_path", "satellite_name",
+        "tle_epoch_utc", "df", "track_points",
+    } <= set(result)
+    assert result["line1"] == l1
+    # Real offline propagation over the validated window.
+    assert len(result["track_points"]) == 1201
