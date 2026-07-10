@@ -251,7 +251,7 @@ plot_all_waveforms(
 - [x] MassDownloader-based waveform acquisition
 - [x] Instrument response removal and bandpass filtering
 - [x] Visualization utilities
-- [ ] Automated test suite
+- [x] Automated test suite
 - [x] Full documentation site
 - [ ] Parallelized station queries for full-orbit passes
 - [ ] Automated sonic boom detection and classification
