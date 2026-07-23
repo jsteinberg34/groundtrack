@@ -2,11 +2,11 @@
 Unit tests for groundtrack.tiling.
 
 Covers time-window padding, along-track box chunking with overlap, antimeridian
-box bounds, short-track / invalid-parameter edge cases, and the download-request
-conversion. Uses obspy's CPU-only geodesy -- no network.
+box bounds, short-track / invalid-parameter edge cases, the download-request
+conversion, and the ocean-box filter. Uses obspy's CPU-only geodesy -- no network.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -14,10 +14,28 @@ from groundtrack.tiling import (
     pad_window,
     track_to_box_windows,
     box_windows_to_download_requests,
+    filter_ocean_boxes,
 )
-from groundtrack.types import TrackPoint
+from groundtrack.types import GeoBox, BoxWindow, TrackPoint
 
 from conftest import EPOCH
+
+
+# --------------------------------------------------------------------------- #
+# Helper
+# --------------------------------------------------------------------------- #
+
+_T = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+
+def _make_box_window(lat_min, lat_max, lon_min, lon_max):
+    """Minimal BoxWindow for filter_ocean_boxes tests (only box bounds matter)."""
+    box = GeoBox(lat_min=lat_min, lat_max=lat_max, lon_min=lon_min, lon_max=lon_max, box_index=0)
+    return BoxWindow(
+        box=box, t_enter=_T, t_exit=_T,
+        t_download_start=_T, t_download_end=_T,
+        first_track_index=0, last_track_index=1, n_points=2,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -38,7 +56,8 @@ def test_pad_window_shifts_start_earlier_and_end_later():
 
 def test_chunking_produces_sequential_overlapping_boxes(equator_track):
     windows = track_to_box_windows(
-        equator_track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0
+        equator_track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0,
+        skip_ocean=False,
     )
 
     assert len(windows) >= 2
@@ -60,7 +79,8 @@ def test_latitude_bounds_padded_by_corridor_and_clamped(make_track):
     # Track near the north pole so corridor padding clamps at +90.
     track = make_track(lat=89.5, lon_step=0.5, n=20)
     windows = track_to_box_windows(
-        track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0
+        track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0,
+        skip_ocean=False,
     )
     box = windows[0].box
     # corridor of 100 km is ~0.9 deg; lat_max must clamp at 90, not exceed it.
@@ -95,7 +115,8 @@ def test_dateline_crossing_chunk_has_wrapped_longitude_bounds():
         for i, lon in enumerate(lons)
     ]
     windows = track_to_box_windows(
-        track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0
+        track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0,
+        skip_ocean=False,
     )
     box = windows[0].box
     # lon_min > lon_max signals the box spans the antimeridian.
@@ -151,3 +172,67 @@ def test_download_requests_map_keys_and_values(equator_track):
         assert req["lon_max"] == w.box.lon_max
         assert req["t_start_utc"] == w.t_download_start
         assert req["t_end_utc"] == w.t_download_end
+
+
+# --------------------------------------------------------------------------- #
+# filter_ocean_boxes
+# --------------------------------------------------------------------------- #
+
+def test_filter_ocean_boxes_drops_all_ocean_box():
+    # Mid-Pacific: no land between 5-10°N, 160-155°W.
+    w = _make_box_window(5, 10, -160, -155)
+    assert filter_ocean_boxes([w]) == []
+
+
+def test_filter_ocean_boxes_keeps_land_box():
+    # US interior (Kansas/Nebraska): entirely over land.
+    w = _make_box_window(38, 42, -100, -95)
+    assert filter_ocean_boxes([w]) == [w]
+
+
+def test_filter_ocean_boxes_keeps_coastal_mixed_box():
+    # US West Coast: straddles the California coastline, part ocean part land.
+    w = _make_box_window(35, 40, -125, -120)
+    assert filter_ocean_boxes([w]) == [w]
+
+
+def test_filter_ocean_boxes_handles_antimeridian_crossing():
+    # Open Pacific straddling the dateline (lon_min > lon_max).
+    # Naive linspace(179, -179, 5) = [179, 90, 0, -90, -179] — sweeps the globe
+    # and could falsely hit land at 90°E (Indian Ocean / India at higher lats).
+    # The correct split samples only the actual box near ±180°.
+    w = _make_box_window(-5, 5, 179, -179)
+    assert filter_ocean_boxes([w]) == []
+
+
+def test_filter_ocean_boxes_empty_input():
+    assert filter_ocean_boxes([]) == []
+
+
+# --------------------------------------------------------------------------- #
+# track_to_box_windows -- skip_ocean parameter
+# --------------------------------------------------------------------------- #
+
+def test_skip_ocean_true_filters_ocean_boxes(equator_track):
+    # The equator track runs 0°–19.5°E. The first box (~0–2.7°E) is entirely
+    # over the Gulf of Guinea (open ocean) and must be dropped when skip_ocean=True.
+    all_boxes = track_to_box_windows(equator_track, skip_ocean=False)
+    kept_boxes = track_to_box_windows(equator_track, skip_ocean=True)
+    assert len(kept_boxes) < len(all_boxes)
+
+
+def test_skip_ocean_false_returns_all_boxes(equator_track):
+    # skip_ocean=False must reproduce the pre-filter box count exactly.
+    all_boxes = track_to_box_windows(equator_track, skip_ocean=False)
+    default_no_skip = track_to_box_windows(
+        equator_track, chunk_km=300.0, overlap_km=50.0, corridor_km=100.0,
+        pre_pad_minutes=2, post_pad_minutes=13, skip_ocean=False,
+    )
+    assert len(all_boxes) == len(default_no_skip)
+
+
+def test_skip_ocean_default_is_true(equator_track):
+    # Calling without skip_ocean should behave identically to skip_ocean=True.
+    implicit = track_to_box_windows(equator_track)
+    explicit = track_to_box_windows(equator_track, skip_ocean=True)
+    assert len(implicit) == len(explicit)
