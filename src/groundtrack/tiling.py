@@ -3,9 +3,42 @@ from __future__ import annotations
 import numpy as np
 from datetime import timedelta
 from obspy.geodetics import gps2dist_azimuth, kilometers2degrees
+from global_land_mask import globe as _globe
 
 from .types import GeoBox, BoxWindow
 from .geodesy import wrap_lon_deg, lon_bounds_dateline_safe
+
+
+def filter_ocean_boxes(windows, grid_n=5):
+    """
+    Remove BoxWindows whose entire footprint is over open ocean.
+
+    Samples a grid_n x grid_n grid of lat/lon points across each box and
+    drops any box where every point is ocean. Boxes that contain at least
+    one land point are kept.
+
+    Antimeridian-crossing boxes (lon_min > lon_max) are handled by splitting
+    the longitude sample into two half-ranges either side of 180°, rather
+    than using a single linspace which would sweep the globe in the wrong
+    direction.
+    """
+    kept = []
+    for w in windows:
+        lats = np.linspace(w.box.lat_min, w.box.lat_max, grid_n)
+
+        if w.box.lon_min <= w.box.lon_max:
+            lons = np.linspace(w.box.lon_min, w.box.lon_max, grid_n)
+        else:
+            lons = np.concatenate([
+                np.linspace(w.box.lon_min, 180.0, grid_n // 2 + 1),
+                np.linspace(-180.0, w.box.lon_max, grid_n // 2 + 1),
+            ])
+
+        lat_grid, lon_grid = np.meshgrid(lats, lons)
+        if _globe.is_land(lat_grid.ravel(), lon_grid.ravel()).any():
+            kept.append(w)
+
+    return kept
 
 
 def pad_window(t_enter, t_exit, pre_pad_minutes, post_pad_minutes):
@@ -29,6 +62,7 @@ def track_to_box_windows(
     corridor_km=100.0,
     pre_pad_minutes=2,
     post_pad_minutes=13,
+    skip_ocean=True,
 ):
     """
     Build overlapping along-track chunks of approximately chunk_km, with
@@ -127,6 +161,9 @@ def track_to_box_windows(
             next_start_idx = start_idx + 1
 
         start_idx = next_start_idx
+
+    if skip_ocean:
+        windows = filter_ocean_boxes(windows)
 
     return windows
 
