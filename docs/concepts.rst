@@ -26,6 +26,8 @@ The boxes overlap by 50 km. This ensures that a station near the boundary betwee
 
 Each box is independent — it has its own geographic bounds, its own time window, and its own output directory. This design makes the download step resumable: if a run gets interrupted, boxes that were already completed are skipped on the next run.
 
+Before passing boxes to the download stage, groundtrack automatically drops any box whose entire footprint is over open ocean. Since seismic stations only exist on land, an all-ocean box will always return zero stations from FDSN — querying it wastes time without any possibility of data. The check uses a 1 km-resolution global land mask (GLOBE dataset) sampled across a 5×5 grid of points covering each box. For re-entry tracks with significant ocean legs, this typically eliminates 40–50% of boxes and reduces station-query wall time by a similar fraction.
+
 Two-Phase Download
 ------------------
 

@@ -43,6 +43,7 @@ TILING_PARAMS = dict(
     corridor_km=100.0,
     pre_pad_minutes=2,
     post_pad_minutes=13,
+    skip_ocean=False,   # pin historical behavior; box_000 is over the Pacific
 )
 GOLDEN_N_BOXES = 35
 GOLDEN_BOX0_BOUNDS = dict(

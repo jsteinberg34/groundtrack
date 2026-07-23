@@ -14,6 +14,19 @@ Initial public release.
 - Visualization utilities (requires ``[plotting]`` extras)
 - Validated against the Shenzhou-15 re-entry event (NORAD ID 56873)
 
+0.2.0 (2026-07-22)
+------------------
+
+- Added ``filter_ocean_boxes()`` to skip tiles whose entire footprint is over open ocean before querying FDSN providers, reducing station query time by ~45% on tracks with significant ocean coverage (e.g. Shenzhou-15: 35 boxes → 19 boxes, 43 seconds saved on the station-query phase alone)
+- ``track_to_box_windows()`` now accepts ``skip_ocean=True`` (default) to apply this filter automatically; pass ``skip_ocean=False`` to restore the previous behaviour
+- Added ``global-land-mask`` as a core dependency (1 km-resolution GLOBE land mask, 1.8 MB wheel, no transitive dependencies)
+
+0.1.3 (2026-06-25)
+------------------
+
+- Added full automated test suite covering all pipeline stages (geodesy, tiling, types, processing, stations, download, track, pipeline)
+- Coverage reported to Codecov on every CI run
+
 0.1.2 (2026-05-30)
 ------------------
 

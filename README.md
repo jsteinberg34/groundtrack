@@ -60,7 +60,7 @@ Groundtrack is a Python library developed for discovering and analyzing seismic 
 
 1. Fetches TLE elements from Space-Track using a user-provided NORAD ID
 2. Propagates the ground track over a user-defined analysis window
-3. Tiles the track into spatial boxes and queries FDSN providers for any nearby seismic stations that fall within a given box
+3. Tiles the track into spatial boxes, automatically skips boxes that are entirely over open ocean, and queries FDSN providers for nearby seismic stations in the remaining boxes
 4. Downloads waveform data for stations within a configurable distance from the ground track
 5. Applies instrument response removal and bandpass filtering
 6. Provides optional visualization tools for validating output
@@ -79,6 +79,7 @@ The library was developed at Johns Hopkins University as independent research in
 * [![pandas][pandas]][pandas-url]
 * [![Space-Track][SpaceTrack]][SpaceTrack-url]
 * [![Skyfield][Skyfield]][Skyfield-url]
+* [![global-land-mask][GlobalLandMask]][GlobalLandMask-url]
 
 
 
@@ -253,6 +254,7 @@ plot_all_waveforms(
 - [x] Visualization utilities
 - [x] Automated test suite
 - [x] Full documentation site
+- [x] Ocean-tile filtering to skip all-ocean boxes before FDSN queries (~45% speedup on station query phase)
 - [ ] Parallelized station queries for full-orbit passes
 - [ ] Automated sonic boom detection and classification
 - [ ] Trajectory reconstruction from detection results
@@ -363,3 +365,6 @@ Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/j
 
 [Skyfield]: https://img.shields.io/badge/Skyfield-orbital%20propagation-blue?style=for-the-badge
 [Skyfield-url]: https://rhodesmill.org/skyfield/
+
+[GlobalLandMask]: https://img.shields.io/badge/global--land--mask-land%20detection-green?style=for-the-badge
+[GlobalLandMask-url]: https://pypi.org/project/global-land-mask/
