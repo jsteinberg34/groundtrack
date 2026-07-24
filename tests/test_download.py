@@ -15,6 +15,7 @@ from groundtrack.download import (
     _normalize_providers,
     _count_files,
     _make_mseed_storage,
+    _query_provider,
     download_boxes,
 )
 
@@ -48,10 +49,6 @@ def test_make_mseed_storage_gates_on_approved(tmp_path):
     assert storage("XX", "BBB", "", "HHZ", None, None) is None
 
 
-# --------------------------------------------------------------------------- #
-# download_boxes with faked clients
-# --------------------------------------------------------------------------- #
-
 def _request(box_id="box_000"):
     return {
         "box_id": box_id,
@@ -63,6 +60,41 @@ def _request(box_id="box_000"):
         "t_end_utc": datetime(2020, 1, 1, 0, 10, 0, tzinfo=timezone.utc),
     }
 
+
+# --------------------------------------------------------------------------- #
+# _query_provider
+# --------------------------------------------------------------------------- #
+
+def test_query_provider_writes_stationxml_and_returns_path(tmp_path):
+    client = FakeFDSNClient([("XX", "STA", 0.0, 0.0)])
+    xml_path = _query_provider("MYPROVIDER", client, _request(), ["HHZ", "BHZ"], tmp_path)
+    assert xml_path == tmp_path / "MYPROVIDER_stations.xml"
+    assert xml_path.exists()
+
+
+def test_query_provider_raises_on_no_data(tmp_path):
+    from obspy.clients.fdsn.header import FDSNNoDataException
+
+    class NoDataClient:
+        def get_stations(self, **kwargs):
+            raise FDSNNoDataException("no data")
+
+    with pytest.raises(FDSNNoDataException):
+        _query_provider("MYPROVIDER", NoDataClient(), _request(), ["HHZ"], tmp_path)
+
+
+def test_query_provider_raises_on_generic_error(tmp_path):
+    class FailingClient:
+        def get_stations(self, **kwargs):
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        _query_provider("MYPROVIDER", FailingClient(), _request(), ["HHZ"], tmp_path)
+
+
+# --------------------------------------------------------------------------- #
+# download_boxes with faked clients
+# --------------------------------------------------------------------------- #
 
 def _patch_clients(monkeypatch, stations, mdl=FakeMassDownloader):
     monkeypatch.setattr(
