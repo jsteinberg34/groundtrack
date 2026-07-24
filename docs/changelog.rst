@@ -14,6 +14,11 @@ Initial public release.
 - Visualization utilities (requires ``[plotting]`` extras)
 - Validated against the Shenzhou-15 re-entry event (NORAD ID 56873)
 
+0.2.1 (2026-07-23)
+------------------
+
+- FDSN provider station queries are now issued concurrently (``ThreadPoolExecutor``) rather than sequentially, reducing per-box station-query wall time from ``N × latency`` to ``~latency`` where N is the number of configured providers
+
 0.2.0 (2026-07-22)
 ------------------
 
