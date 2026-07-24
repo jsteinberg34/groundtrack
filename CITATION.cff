@@ -43,8 +43,8 @@ keywords:
   - FDSN
   - SGP4
 license: MIT
-version: 0.2.0
-date-released: '2026-07-22'
+version: 0.2.1
+date-released: '2026-07-23'
 references:
   - type: article
     title: "Reentry and disintegration dynamics of space debris tracked using seismic data"
