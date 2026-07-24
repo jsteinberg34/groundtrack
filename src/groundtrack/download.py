@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -80,6 +81,25 @@ def _provider_station_query(
         channel=",".join(channel_priorities),
         level=level,
     )
+
+
+def _query_provider(
+    provider_name: str,
+    client: Client,
+    req: dict,
+    channel_priorities: Sequence[str],
+    inv_dir: Path,
+) -> Path:
+    """Worker: query one FDSN provider and write its StationXML to disk. Returns the xml_path."""
+    inv = _provider_station_query(
+        client=client,
+        req=req,
+        channel_priorities=channel_priorities,
+        level="station",
+    )
+    xml_path = inv_dir / f"{provider_name}_stations.xml"
+    inv.write(str(xml_path), format="STATIONXML")
+    return xml_path
 
 
 def _make_mseed_storage(approved_stations: set[tuple[str, str]], wav_dir: Path):
@@ -216,28 +236,24 @@ def download_boxes(
         # ------------------------------------------------------------
         provider_stationxml_files = []
 
-        for provider_name, client in clients.items():
-            try:
-                inv = _provider_station_query(
-                    client=client,
-                    req=req,
-                    channel_priorities=channel_priorities,
-                    level="station",
-                )
-
-                xml_path = inv_dir / f"{provider_name}_stations.xml"
-                inv.write(str(xml_path), format="STATIONXML")
-                provider_stationxml_files.append(xml_path)
-
-                if verbose:
-                    print(f"    inventory from {provider_name}: saved {xml_path.name}")
-
-            except FDSNNoDataException:
-                if verbose:
-                    print(f"    inventory from {provider_name}: no data")
-            except Exception as e:
-                if verbose:
-                    print(f"    inventory from {provider_name}: FAILED -> {repr(e)}")
+        with ThreadPoolExecutor(max_workers=max(1, len(clients))) as executor:
+            futures = {
+                executor.submit(_query_provider, name, client, req, channel_priorities, inv_dir): name
+                for name, client in clients.items()
+            }
+            for future in as_completed(futures):
+                provider_name = futures[future]
+                try:
+                    xml_path = future.result()
+                    provider_stationxml_files.append(xml_path)
+                    if verbose:
+                        print(f"    inventory from {provider_name}: saved {xml_path.name}")
+                except FDSNNoDataException:
+                    if verbose:
+                        print(f"    inventory from {provider_name}: no data")
+                except Exception as e:
+                    if verbose:
+                        print(f"    inventory from {provider_name}: FAILED -> {repr(e)}")
 
         # Parse raw candidate stations from the StationXML files we just saved.
         station_rows = parse_stationxml_files(provider_stationxml_files)

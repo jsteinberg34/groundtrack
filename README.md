@@ -255,7 +255,7 @@ plot_all_waveforms(
 - [x] Automated test suite
 - [x] Full documentation site
 - [x] Ocean-tile filtering to skip all-ocean boxes before FDSN queries (~45% speedup on station query phase)
-- [ ] Parallelized station queries for full-orbit passes
+- [x] Parallelized station queries for full-orbit passes
 - [ ] Automated sonic boom detection and classification
 - [ ] Trajectory reconstruction from detection results
 - [ ] Live re-entry support with real-time orbital data updates
