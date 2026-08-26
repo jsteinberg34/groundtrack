@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.2.2 (2026-08-26)
+------------------
+
+- Fixed ``filter_stations_by_track_distance()`` not passing ``corridor_km`` through to the cross-track refinement in ``min_distance_km_to_track()``, so the boundary-precision correction (present since the initial 0.1.1 release) never actually ran. Now wired up. It only affects stations within 10 km of the corridor threshold (3 of 37 candidates in a real test case), can only rescue stations that were wrongly excluded, never drop ones already included, and adds a few microseconds per affected station -- negligible next to a single station-inventory network query (~100 ms).
+
 0.1.1 (2026-05-09)
 ------------------
 

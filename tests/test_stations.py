@@ -5,6 +5,8 @@ All functions here are network-free: StationXML is read from local files, and
 the rest is pure data processing. Uses synthetic StationXML and tmp_path.
 """
 
+import pytest
+
 from groundtrack.stations import (
     find_stationxml_files,
     parse_stationxml_files,
@@ -13,6 +15,10 @@ from groundtrack.stations import (
     load_and_filter_stations,
     station_lats_lons,
 )
+from groundtrack.geodesy import min_distance_km_to_track, _AMBIGUOUS_BAND_KM
+from groundtrack.types import TrackPoint
+
+from conftest import EPOCH, KM_PER_DEGREE
 
 
 def _write_station(synthetic_inventory, path, network, station, lat, lon):
@@ -93,6 +99,38 @@ def test_filter_stations_by_track_distance(make_track):
     assert [s["station"] for s in kept] == ["NEAR"]
     assert "min_dist_km" in kept[0]
     assert kept[0]["min_dist_km"] < 100.0
+
+
+def test_filter_stations_by_track_distance_refines_ambiguous_band_station():
+    # Two widely spaced track points; a station near the midpoint has a
+    # point-sampled distance (~567 km, to the nearest endpoint) far larger
+    # than its true perpendicular cross-track distance (~111 km, one degree
+    # off the great-circle arc). filter_stations_by_track_distance must
+    # thread corridor_km into min_distance_km_to_track so this refinement
+    # actually runs -- otherwise the station is wrongly rejected using only
+    # the point-sampled distance.
+    track = [
+        TrackPoint(time=EPOCH, lat=0.0, lon=0.0),
+        TrackPoint(time=EPOCH, lat=0.0, lon=10.0),
+    ]
+    station_lat, station_lon = 1.0, 5.0
+
+    point_sampled = min_distance_km_to_track(station_lat, station_lon, track)
+    assert point_sampled == pytest.approx(567.0, rel=1e-2)
+
+    # Corridor placing the point-sampled distance inside the ambiguous band,
+    # but far above the true refined distance -- so refinement flips the
+    # inclusion decision from reject to keep.
+    corridor_km = point_sampled - 5.0
+    assert abs(point_sampled - corridor_km) < _AMBIGUOUS_BAND_KM
+
+    stations = [
+        {"network": "XX", "station": "MID", "lat": station_lat, "lon": station_lon}
+    ]
+    kept = filter_stations_by_track_distance(stations, track, corridor_km=corridor_km)
+
+    assert [s["station"] for s in kept] == ["MID"]
+    assert kept[0]["min_dist_km"] == pytest.approx(KM_PER_DEGREE, rel=1e-3)
 
 
 # --------------------------------------------------------------------------- #

@@ -146,7 +146,8 @@ def filter_stations_by_track_distance(
         d_km = min_distance_km_to_track(
             row["lat"],
             row["lon"],
-            track_points
+            track_points,
+            corridor_km=corridor_km,
         )
 
         if d_km <= corridor_km:

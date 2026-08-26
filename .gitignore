@@ -34,5 +34,9 @@ download_old.py
 # Validation notebooks
 notebooks/
 
+# Local-only benchmark scripts/notebooks/figures (Seismica paper work-in-progress)
+benchmarks/
+
+
 # Basic smoke test file
 /test.py
