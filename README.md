@@ -310,7 +310,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Joseph Steinberg - [LinkedIn](https://www.linkedin.com/in/joey-steinberg/) - josephsteinberg933@gmail.com
+Joseph Steinberg - [LinkedIn](https://www.linkedin.com/in/joey-steinberg/) - jstein58@jh.edu
 
 Project Link: [https://github.com/jsteinberg34/groundtrack](https://github.com/jsteinberg34/groundtrack)
 
