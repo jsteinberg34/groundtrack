@@ -314,7 +314,8 @@ def plot_waveform_comparison(
     ax_raw = axes[0]
     if tr_raw is not None:
         t_raw = tr_raw.times("matplotlib")
-        ax_raw.plot_date(t_raw, tr_raw.data, "-", linewidth=0.6)
+        ax_raw.xaxis_date()
+        ax_raw.plot(t_raw, tr_raw.data, "-", linewidth=0.6)
         ax_raw.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
         ax_raw.xaxis.set_major_locator(mdates.AutoDateLocator())
         plt.setp(ax_raw.xaxis.get_majorticklabels(), rotation=30, ha="right")
@@ -329,7 +330,8 @@ def plot_waveform_comparison(
     ax_proc = axes[1]
     if tr_proc is not None:
         t_proc = tr_proc.times("matplotlib")
-        ax_proc.plot_date(t_proc, tr_proc.data * 1e6, "-", linewidth=0.6, color="tab:orange")
+        ax_proc.xaxis_date()
+        ax_proc.plot(t_proc, tr_proc.data * 1e6, "-", linewidth=0.6, color="tab:orange")
         ax_proc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
         ax_proc.xaxis.set_major_locator(mdates.AutoDateLocator())
         plt.setp(ax_proc.xaxis.get_majorticklabels(), rotation=30, ha="right")
@@ -447,7 +449,8 @@ def plot_all_waveforms(
         ax_raw = axes[row, 0]
         if tr_raw is not None:
             t_raw = tr_raw.times("matplotlib")
-            ax_raw.plot_date(t_raw, tr_raw.data, "-", linewidth=0.6)
+            ax_raw.xaxis_date()
+            ax_raw.plot(t_raw, tr_raw.data, "-", linewidth=0.6)
             ax_raw.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
             ax_raw.xaxis.set_major_locator(mdates.AutoDateLocator())
             plt.setp(ax_raw.xaxis.get_majorticklabels(), rotation=30, ha="right")
@@ -461,7 +464,8 @@ def plot_all_waveforms(
         ax_proc = axes[row, 1]
         if tr_proc is not None:
             t_proc = tr_proc.times("matplotlib")
-            ax_proc.plot_date(t_proc, tr_proc.data * 1e6, "-", linewidth=0.6, color="tab:orange")
+            ax_proc.xaxis_date()
+            ax_proc.plot(t_proc, tr_proc.data * 1e6, "-", linewidth=0.6, color="tab:orange")
             ax_proc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
             ax_proc.xaxis.set_major_locator(mdates.AutoDateLocator())
             plt.setp(ax_proc.xaxis.get_majorticklabels(), rotation=30, ha="right")

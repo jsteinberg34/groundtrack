@@ -5,7 +5,7 @@ Tools for discovering seismic signals from atmospheric re-entry events
 using orbital ground tracks and seismic station data.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Allow user to import below functions directly from the package
 from .download import download_boxes 
