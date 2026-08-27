@@ -1,8 +1,8 @@
 [project]
 name = "groundtrack"
-version = "0.2.2"
+version = "0.2.3"
 description = "Seismic waveform pipeline for orbital reentry events"
-authors = [{name = "Joseph Steinberg", email = "josephsteinberg933@gmail.com"}]
+authors = [{name = "Joseph Steinberg", email = "jstein58@jh.edu"}]
 requires-python = ">=3.10"
 license = {text = "MIT"}
 readme = "README.md"

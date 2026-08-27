@@ -1,10 +1,12 @@
 """
 Unit tests for the pure logic in groundtrack.plotting.
 
-Only _compute_extent is tested -- it is pure (numpy + wrap_lon_deg) and imports
-without matplotlib/cartopy. The actual plot_* functions are thin
-matplotlib/cartopy wrappers (optional viz extra) and are intentionally not
-unit-tested; plotting.py is excluded from coverage accordingly.
+Only _compute_extent is tested here -- it is pure (numpy + wrap_lon_deg) and
+imports without matplotlib/cartopy. plot_waveform_comparison() and
+plot_all_waveforms() are covered separately in test_plotting_render.py,
+gated behind the optional [plotting] extras. plot_track_and_boxes(),
+plot_stations(), and plot_station_comparison() remain untested;
+plotting.py stays excluded from coverage accordingly.
 """
 
 from datetime import datetime

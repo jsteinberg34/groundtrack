@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.2.3 (2026-08-26)
+------------------
+
+- Fixed ``plot_waveform_comparison()`` and ``plot_all_waveforms()`` raising ``AttributeError`` on modern matplotlib (``Axes.plot_date`` was removed in 3.11, not just deprecated). Replaced with ``ax.xaxis_date()`` + ``ax.plot()``, a confirmed drop-in equivalent with no change to rendered output.
+
 0.2.2 (2026-08-26)
 ------------------
 
