@@ -55,6 +55,8 @@ def run_pipeline(
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
+    max_workers: int = 3,
+    threads_per_client: int = 3,
     # --- Processing ---
     apply_processing: bool = False,
     demean: bool = True,
@@ -165,6 +167,8 @@ def run_pipeline(
         channel_priorities=channel_priorities,
         location_priorities=location_priorities,
         overwrite_existing=overwrite_existing,
+        max_workers=max_workers,
+        threads_per_client=threads_per_client,
         verbose=verbose,
         apply_processing=apply_processing,
         demean=demean,
