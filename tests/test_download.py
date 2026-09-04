@@ -677,3 +677,71 @@ def test_max_workers_at_the_cap_does_not_warn(tmp_path, monkeypatch, make_track)
             max_workers=MAX_WORKERS_CAP,
         )
     assert manifest["max_workers"] == MAX_WORKERS_CAP
+
+
+@pytest.mark.parametrize("seeded_first", [True, False])
+@pytest.mark.parametrize("max_workers", [1, 3])
+def test_resume_is_order_independent(
+    tmp_path, monkeypatch, make_track, seeded_first, max_workers
+):
+    """Existing on-disk stations must be registered before ANY box runs.
+
+    Registering them only when the skipped box's own turn arrives is not
+    enough: a fresh box processed earlier -- by submission order, or by
+    winning a worker slot -- would claim those stations and download a
+    second copy.
+    """
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    seeded_id, fresh_id = ("box_000", "box_001") if seeded_first else ("box_001", "box_000")
+
+    seeded = tmp_path / "ev" / "boxes" / seeded_id
+    (seeded / "waveforms").mkdir(parents=True)
+    (seeded / "stations").mkdir(parents=True)
+    for net, sta, *_ in SHARED_STATIONS:
+        (seeded / "waveforms" / f"{net}.{sta}..HHZ.mseed").write_text("x")
+    (seeded / "stations" / "XX.AAA.xml").write_text("x")
+
+    manifest = download_boxes(
+        [_request("box_000"), _request("box_001")], track,
+        output_base=tmp_path, event_name="ev", providers=("TEST",),
+        corridor_km=100.0, verbose=False, max_workers=max_workers,
+    )
+
+    by_id = {r["box_id"]: r for r in manifest["results"]}
+    assert by_id[seeded_id]["status"] == "skipped_existing"
+
+    downloaded = _downloaded_station_set(tmp_path / "ev" / "boxes")
+    counts = {}
+    for _, sta in downloaded:
+        counts[sta] = counts.get(sta, 0) + 1
+
+    # Each station on disk exactly once, wherever it happens to live.
+    assert counts == {"AAA": 1, "BBB": 1, "CCC": 1}
+    # And the fresh box re-downloaded nothing the seeded box already had.
+    assert by_id[fresh_id]["mseed_files"] == 0
+
+
+def test_partially_downloaded_box_is_not_pre_registered(
+    tmp_path, monkeypatch, make_track
+):
+    """Only boxes that will actually be skipped get pre-registered. A box with
+    waveforms but no StationXML is not skipped, so it must still be able to
+    claim and complete rather than being silently starved."""
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    partial = tmp_path / "ev" / "boxes" / "box_000"
+    (partial / "waveforms").mkdir(parents=True)
+    (partial / "stations").mkdir(parents=True)          # no .xml -> not skipped
+    (partial / "waveforms" / "XX.AAA..HHZ.mseed").write_text("x")
+
+    manifest = download_boxes(
+        [_request("box_000")], track, output_base=tmp_path, event_name="ev",
+        providers=("TEST",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    box = manifest["results"][0]
+    assert box["status"] == "ok"          # ran, not skipped
+    assert box["claimed_station_count"] == 3

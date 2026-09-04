@@ -556,6 +556,31 @@ def download_boxes(
     claimed: set[tuple[str, str]] = set()
     claim_lock = threading.Lock()
 
+    # Register everything already on disk before any box runs.
+    #
+    # Doing this only inside the workers is not enough. A box that will be
+    # skipped registers its stations when its turn comes, but a *fresh* box
+    # that runs earlier -- because it was submitted first, or simply won the
+    # race for a worker slot -- would see those stations as unclaimed and
+    # download a second copy. That is the same duplication this whole
+    # mechanism exists to prevent, just triggered by resume ordering rather
+    # than by box overlap.
+    #
+    # Only boxes that will actually be skipped are pre-registered, matching
+    # the skip condition below exactly: a partially-downloaded box still needs
+    # to run and re-request whatever it is missing.
+    if not overwrite_existing:
+        for req in requests:
+            box_dir = boxes_root / req["box_id"]
+            wav_dir, inv_dir = box_dir / "waveforms", box_dir / "stations"
+            if not wav_dir.is_dir() or not inv_dir.is_dir():
+                continue
+            if _count_files(wav_dir, "*.mseed") > 0 and _count_files(inv_dir, "*.xml") > 0:
+                claimed.update(_existing_station_keys(wav_dir))
+
+        if verbose and claimed:
+            print(f"Pre-registered {len(claimed)} stations already on disk")
+
     processing_params = {
         "demean": demean,
         "detrend_linear": detrend_linear,
