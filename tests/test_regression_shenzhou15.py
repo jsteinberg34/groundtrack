@@ -98,3 +98,94 @@ def test_tiling_matches_reference_with_pinned_params(shenzhou15_tle):
     assert box0.lat_max == pytest.approx(GOLDEN_BOX0_BOUNDS["lat_max"], abs=1e-3)
     assert box0.lon_min == pytest.approx(GOLDEN_BOX0_BOUNDS["lon_min"], abs=1e-3)
     assert box0.lon_max == pytest.approx(GOLDEN_BOX0_BOUNDS["lon_max"], abs=1e-3)
+
+
+# --------------------------------------------------------------------------- #
+# cross-box ownership over the real Shenzhou-15 geometry
+# --------------------------------------------------------------------------- #
+#
+# The synthetic tests in test_download.py use contrived fully-overlapping boxes.
+# This one runs the ownership logic over the actual 35-box Shenzhou-15 tiling,
+# whose ~96% adjacent-window overlap is what produced the duplicate downloads
+# this behavior exists to prevent. Stations are placed directly on the real
+# track, so each one legitimately falls inside several neighbouring corridors.
+
+def _stations_on_track(track, every=120):
+    """Synthetic stations sitting on the real ground track, so they are
+    genuinely inside the corridor of more than one box."""
+    return [
+        ("XX", f"S{i:04d}", track[i].lat, track[i].lon)
+        for i in range(0, len(track), every)
+    ]
+
+
+def test_real_geometry_downloads_each_station_at_most_once(
+    shenzhou15_tle, tmp_path, monkeypatch
+):
+    from groundtrack.download import download_boxes
+    from groundtrack.tiling import box_windows_to_download_requests
+    from conftest import FakeFDSNClient, FakeMassDownloader
+
+    track = _build_reference_track(*shenzhou15_tle)
+    windows = track_to_box_windows(track, **TILING_PARAMS)
+    requests = box_windows_to_download_requests(windows)
+
+    stations = _stations_on_track(track)
+    monkeypatch.setattr(
+        "groundtrack.download.Client", lambda name: FakeFDSNClient(stations)
+    )
+    monkeypatch.setattr("groundtrack.download.MassDownloader", FakeMassDownloader)
+
+    manifest = download_boxes(
+        requests, track, output_base=tmp_path, event_name="sz15",
+        providers=("TEST",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    boxes_root = tmp_path / "sz15" / "boxes"
+    files = list(boxes_root.rglob("waveforms/*.mseed"))
+    station_codes = [f.name.split(".")[1] for f in files]
+
+    # The point of the whole change: one file per physical station, no matter
+    # how many of the 35 overlapping boxes it falls inside.
+    assert len(station_codes) == len(set(station_codes))
+    assert set(station_codes) == {s[1] for s in stations}
+
+    # Membership genuinely exceeds ownership here -- i.e. the geometry really
+    # does put stations in multiple boxes, so the assertion above has teeth.
+    total_membership = sum(r.get("filtered_station_count", 0) for r in manifest["results"])
+    total_owned = sum(r.get("claimed_station_count", 0) for r in manifest["results"])
+    assert total_membership > total_owned
+    assert total_owned == len(stations)
+
+
+def test_real_geometry_station_set_matches_across_concurrency(
+    shenzhou15_tle, tmp_path, monkeypatch
+):
+    from groundtrack.download import download_boxes
+    from groundtrack.tiling import box_windows_to_download_requests
+    from conftest import FakeFDSNClient, FakeMassDownloader
+
+    track = _build_reference_track(*shenzhou15_tle)
+    requests = box_windows_to_download_requests(
+        track_to_box_windows(track, **TILING_PARAMS)
+    )
+    stations = _stations_on_track(track)
+
+    monkeypatch.setattr(
+        "groundtrack.download.Client", lambda name: FakeFDSNClient(stations)
+    )
+    monkeypatch.setattr("groundtrack.download.MassDownloader", FakeMassDownloader)
+
+    def run(out_name, max_workers):
+        download_boxes(
+            requests, track, output_base=tmp_path, event_name=out_name,
+            providers=("TEST",), corridor_km=100.0, verbose=False,
+            max_workers=max_workers,
+        )
+        root = tmp_path / out_name / "boxes"
+        return {p.name.split(".")[1] for p in root.rglob("waveforms/*.mseed")}
+
+    sequential = run("seq", 1)
+    concurrent = run("par", 4)
+
+    assert sequential == concurrent == {s[1] for s in stations}

@@ -320,7 +320,8 @@ class FakeMassDownloader:
     def __init__(self, providers=None):
         self.providers = providers
 
-    def download(self, domain, restrictions, mseed_storage=None, stationxml_storage=None):
+    def download(self, domain, restrictions, mseed_storage=None,
+                 stationxml_storage=None, threads_per_client=3):
         networks = [n for n in (restrictions.network or "").split(",") if n]
         stations = [s for s in (restrictions.station or "").split(",") if s]
         channels = list(restrictions.channel_priorities) or ["HHZ"]

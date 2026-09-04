@@ -183,6 +183,7 @@ results = run_pipeline(
     event_name="shenzhou15_reentry",
     corridor_km=100.0,          # station inclusion threshold
     chunk_km=300.0,             # along-track box size
+    max_workers=3,              # boxes downloaded concurrently (1 = sequential)
     apply_processing=True,      # remove instrument response + bandpass
     freqmin=1.0,                # bandpass lower corner (Hz)
     freqmax=20.0,               # bandpass upper corner (Hz)

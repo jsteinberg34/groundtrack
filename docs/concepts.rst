@@ -39,6 +39,22 @@ The download stage runs in two phases for each box:
 
 This two-phase approach is the key efficiency win. By filtering stations before requesting any waveform data, we avoid downloading from stations that are inside the rectangular box but are actually far from the track.
 
+Station Ownership Across Boxes
+------------------------------
+
+Neighbouring boxes deliberately overlap, so a single physical station is frequently within the corridor of two or three of them. Downloading it once per box would fetch the same data repeatedly — on the Shenzhou-15 reference event that accounted for roughly one file in six.
+
+Instead, each station is *claimed* by whichever box reaches it first and downloaded exactly once, over that box's own time window. Because consecutive boxes are only tens of seconds apart while their windows span many minutes, the windows overlap almost entirely, so a station is covered essentially as well by one box's window as by the union of every box it falls in — for far less data.
+
+Ownership is bookkeeping, not geometry. Every box still records all the stations near it, so plotting and per-box analysis are unaffected; a box simply may not be the one holding the file.
+
+Concurrent Boxes
+----------------
+
+Boxes are independent apart from that shared ownership record, so several download at once (``max_workers``, default 3). Because it multiplies against each downloader's own internal thread pool (``threads_per_client``, default 3) to give the total connections opened against a data centre, both defaults are deliberately conservative — FDSN providers are shared research infrastructure.
+
+The set of stations downloaded is identical no matter how many boxes run at a time. Which box ends up owning a station near several boxes is not: with concurrency it depends on which worker claims it first. Use ``max_workers=1`` when reproducible per-box placement matters.
+
 Cross-Track Distance
 --------------------
 
