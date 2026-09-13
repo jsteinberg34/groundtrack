@@ -49,30 +49,20 @@ def _normalize_providers(providers):
     Make sure providers are always in a clean list format.
 
     Why:
-    ObsPy accepts either a provider short name or an already-initialized
-    ``Client``, and we rely on the second form to avoid re-running service
-    discovery for every box. ``str()`` on a Client would turn it into its repr
-    and break that, so instances are passed through untouched and only other
-    values are coerced.
+    Only provider *names* reach this point. ``resolve_providers`` rejects client
+    objects outright, since this module builds and reuses its own clients keyed
+    by name, so anything arriving here is already a string or is coerced to one.
+
+    Client reuse happens later and elsewhere: ``_process_one_box`` hands
+    ``MassDownloader`` the initialized ``Client`` objects from the run-level
+    cache, which is what avoids re-running service discovery for every box.
 
     ``None`` and the "auto" sentinel are handled by the caller before this
     point; they are not provider names.
-
-    Clients are recognised by duck typing rather than ``isinstance(p, Client)``
-    so that test doubles and any other client-shaped object work the same way.
     """
     if providers is None:
         return []
-
-    normalized = []
-    for p in providers:
-        if isinstance(p, str):
-            normalized.append(p)
-        elif hasattr(p, "get_stations"):
-            normalized.append(p)
-        else:
-            normalized.append(str(p))
-    return normalized
+    return [p if isinstance(p, str) else str(p) for p in providers]
 
 
 def _count_files(path: Path, pattern: str) -> int:

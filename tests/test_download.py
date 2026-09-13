@@ -1004,3 +1004,72 @@ def test_providers_none_behaves_as_auto(tmp_path, monkeypatch, make_track):
 
     assert manifest["provider_selection_mode"] == "auto"
     assert manifest["results"][0]["providers_queried"]
+
+
+def test_verbose_run_completes(tmp_path, monkeypatch, make_track, capsys):
+    """
+    verbose=True is the library default, so these print paths are what real users
+    hit, yet every other test runs with verbose=False. A stale f-string in one of
+    them would raise for every default run and be invisible to the suite. This
+    exercises the noisy path end to end, including the branches that only fire
+    when something notable happened (excluded networks, unobtainable stations).
+    """
+    _patch_per_provider(
+        monkeypatch,
+        {
+            "SCEDC": [("ZZ", "AAA", 33.6, -118.1), ("SY", "SYNTH", 33.7, -118.2)],
+            "KAGSR": [("ZZ", "METAONLY", 33.8, -118.3)],
+        },
+    )
+    track = make_track(lat=34.0, lon_start=-119.0, lon_step=0.05, n=40)
+
+    manifest = download_boxes(
+        _socal_requests(2), track, output_base=tmp_path, event_name="ev",
+        providers=("SCEDC", "KAGSR"), corridor_km=200.0, verbose=True,
+        max_workers=1,
+    )
+
+    out = capsys.readouterr().out
+    assert "Download Summary" in out
+    assert "reserved networks" in out          # excluded-network branch
+    assert "without a waveform service" in out  # unobtainable branch
+    assert manifest["ok"] == 2
+
+
+def test_provider_provenance_falls_back_safely():
+    """
+    Provenance drives which stations may be claimed, so a filename it cannot
+    attribute must yield "unknown" rather than a wrong provider. MassDownloader
+    also writes {network}.{station}.xml into the same directory, which must not
+    be mistaken for a provider inventory file.
+    """
+    from groundtrack.download import _provider_from_stationxml, _providers_by_station
+
+    assert _provider_from_stationxml("SCEDC_stations.xml") == "SCEDC"
+    assert _provider_from_stationxml("/a/b/KAGSR_stations.xml") == "KAGSR"
+    assert _provider_from_stationxml(None) is None
+    assert _provider_from_stationxml("") is None
+    assert _provider_from_stationxml("CI.SMI.xml") is None      # MassDownloader output
+    assert _provider_from_stationxml("_stations.xml") is None   # empty provider name
+
+    rows = [
+        {"network": "ZZ", "station": "AAA", "source_xml": "SCEDC_stations.xml"},
+        {"network": "ZZ", "station": "BBB", "source_xml": "CI.SMI.xml"},   # unattributable
+        {"network": "ZZ", "station": "CCC"},                                # no provenance
+    ]
+    by_station = _providers_by_station(rows)
+    assert by_station == {("ZZ", "AAA"): {"SCEDC"}}
+
+
+def test_station_without_provenance_is_still_claimable(tmp_path, monkeypatch, make_track):
+    """
+    Unattributable provenance must not be read as "no provider can serve this".
+    Failing open keeps the station on its normal path; failing closed would drop
+    real data on a filename quirk.
+    """
+    from groundtrack.download import _split_obtainable
+
+    stations = [{"network": "ZZ", "station": "AAA"}]
+    obtainable, not_obtainable = _split_obtainable(stations, {})
+    assert obtainable == stations
+    assert not_obtainable == []

@@ -393,3 +393,12 @@ def test_documented_provider_table_matches_the_registry():
         f"Missing from docs: {sorted(expected - documented)}. "
         f"Listed but not supported: {sorted(documented - expected)}."
     )
+
+
+def test_non_string_non_client_provider_is_coerced(fake_map):
+    """
+    Only client objects are rejected, since those silently break the name-keyed
+    client cache. Anything else stringifies, matching the previous behaviour for
+    stray values.
+    """
+    assert P.resolve_providers(SOCAL, providers=[123]) == ["123"]
