@@ -77,7 +77,7 @@ def make_trace():
     def build(
         data=None,
         sampling_rate=100.0,
-        network="XX",
+        network="ZZ",
         station="ABC",
         location="",
         channel="BHZ",
@@ -110,7 +110,7 @@ def make_stream(make_trace):
 
 
 def _build_synthetic_inventory(
-    network="XX",
+    network="ZZ",
     station="ABC",
     channel="BHZ",
     sampling_rate=100.0,
@@ -209,7 +209,7 @@ def make_box_dir(make_trace, synthetic_inventory):
         if with_inventory:
             seen = set()
             for kw in trace_kwargs:
-                net = kw.get("network", "XX")
+                net = kw.get("network", "ZZ")
                 sta = kw.get("station", "ABC")
                 cha = kw.get("channel", "BHZ")
                 sr = kw.get("sampling_rate", 100.0)
