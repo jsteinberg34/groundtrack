@@ -55,7 +55,7 @@ Not selected automatically
 - ``IRISPH5`` — nodal experiment data, which can match enormous requests.
 - ``USGS``, ``EMSC``, ``ISC`` — event catalogues, no station metadata.
 - ``EIDA`` — a router holding no data of its own, routing to members already listed.
-- ``IRIS``, ``IRISDMC``, ``GFZ``, ``ODC``, ``RESIF`` — alternative names for archives already listed. Passing one is fine; it will not be queried twice.
+- ``IRIS``, ``IRISDMC``, ``EARTHSCOPE+USGS``, ``GFZ``, ``ODC``, ``RESIF`` — alternative names for archives already listed. Passing one is fine; it will not be queried twice. (``EARTHSCOPE+USGS`` is EarthScope with only its *event* service redirected to USGS, which this library does not use.)
 
 Any of these can still be requested by name through ``providers`` or ``extra_providers``.
 

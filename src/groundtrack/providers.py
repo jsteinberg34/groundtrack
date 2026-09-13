@@ -116,9 +116,17 @@ EXCLUDED_FROM_AUTO = frozenset({"IRISPH5", "USGS", "EMSC", "ISC", "EIDA"})
 # IRISPH5 is deliberately *not* here: it shares EARTHSCOPE's URL but is a
 # distinct nodal dataset that can match enormous requests, so it stays excluded
 # in its own right rather than collapsing into EARTHSCOPE.
+# Entries may name providers a given ObsPy release does not have. That is
+# deliberate: this table has to classify providers across versions, and an alias
+# for something the installed ObsPy lacks is simply unused.
 ALIASES = {
     "IRIS": "EARTHSCOPE",
     "IRISDMC": "EARTHSCOPE",
+    # Added in ObsPy after 1.5.0. Same EarthScope base URL, with only the
+    # *event* service redirected to USGS, which this library never uses. For
+    # station and dataselect it is EarthScope, so treating it as anything else
+    # would query the same archive twice.
+    "EARTHSCOPE+USGS": "EARTHSCOPE",
     "GFZ": "GEOFON",
     "ODC": "ORFEUS",
     "RESIF": "EPOSFR",

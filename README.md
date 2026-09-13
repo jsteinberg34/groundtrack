@@ -242,8 +242,8 @@ holdings rather than drawn from these labels.
 
 Not selected automatically, but available by name: `RASPISHAKE` (citizen
 science), `IRISPH5` (nodal), `USGS`/`EMSC`/`ISC` (event catalogues only), and
-`EIDA` (a router). `IRIS`, `GFZ`, `ODC` and `RESIF` are alternative names for
-archives already listed.
+`EIDA` (a router). `IRIS`, `EARTHSCOPE+USGS`, `GFZ`, `ODC` and `RESIF` are alternative
+names for archives already listed.
 
 #### Querying Raspberry Shake
 

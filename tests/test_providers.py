@@ -287,9 +287,42 @@ def test_every_obspy_provider_is_classified():
 
 
 def test_aliases_point_at_known_providers():
+    """
+    Every alias must resolve to a provider we actually support. The alias itself
+    need not exist in the installed ObsPy: the table classifies across versions,
+    so it may name one added in a later release (EARTHSCOPE+USGS) or dropped in
+    an earlier one. An unused entry is harmless; one pointing nowhere is not.
+    """
     for alias, target in P.ALIASES.items():
-        assert alias in URL_MAPPINGS
-        assert target in P.INVENTORY or target in set(P.ALWAYS_QUERIED)
+        assert target in P.INVENTORY or target in set(P.ALWAYS_QUERIED), (
+            f"alias {alias} points at {target}, which is not a supported provider"
+        )
+
+
+def test_aliases_that_exist_here_share_their_target_url():
+    """
+    Where the installed ObsPy knows both names, they must really be one archive.
+    EPOSFR/RESIF is the exception: mid-rename, so two URLs, one archive.
+    """
+    for alias, target in P.ALIASES.items():
+        if alias in URL_MAPPINGS and target in URL_MAPPINGS and alias != "RESIF":
+            assert URL_MAPPINGS[alias] == URL_MAPPINGS[target], (
+                f"{alias} and {target} are treated as one archive but have "
+                f"different URLs; querying one would not cover the other"
+            )
+
+
+def test_every_inventory_provider_is_known_to_obspy():
+    """
+    The reverse of the drift test: a provider we list but ObsPy has dropped
+    could never have a client built for it, so auto selection would offer
+    something unreachable.
+    """
+    missing = sorted(name for name in P.INVENTORY if name not in URL_MAPPINGS)
+    assert missing == [], (
+        f"INVENTORY names providers ObsPy no longer knows: {missing}. "
+        f"Remove them and regenerate the region map."
+    )
 
 
 def test_resolution_needs_no_network(monkeypatch):
