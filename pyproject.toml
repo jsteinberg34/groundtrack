@@ -1,6 +1,6 @@
 [project]
 name = "groundtrack"
-version = "0.3.0"
+version = "0.4.0"
 description = "Seismic waveform pipeline for orbital reentry events"
 authors = [{name = "Joseph Steinberg", email = "jstein58@jh.edu"}]
 requires-python = ">=3.10"
@@ -25,6 +25,18 @@ test = [
     "pytest",
     "pytest-cov",
 ]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# Only the package under src/ ships. tools/ holds build_provider_regions.py,
+# which regenerates the provider region map from live FDSN services. It is kept
+# in the repo so the map is auditable and reproducible rather than asserted, but
+# it must not be installed: the library resolves providers entirely offline and
+# nothing at runtime should reach the network.
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
