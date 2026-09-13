@@ -3,7 +3,7 @@ download
 
 The ``download`` module handles waveform acquisition from FDSN seismic data providers. It runs in three phases for each box:
 
-**Phase 1** — inventory query. The library queries each configured provider for the list of stations that exist within the box's geographic bounds. This is a fast, metadata-only request.
+**Phase 1** — inventory query. The library queries the providers selected for that box (see :doc:`providers`) for the list of stations that exist within its geographic bounds. This is a fast, metadata-only request. Clients are constructed once per run and reused, rather than rebuilt per box.
 
 **Phase 2** — distance filtering. Each candidate station is checked against the corridor distance threshold, keeping only stations within ``corridor_km`` of the actual ground track.
 

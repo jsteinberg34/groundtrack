@@ -23,6 +23,8 @@ The simplest call downloads waveform data for a re-entry event without any proce
 
 This runs the full pipeline — fetching the TLE, propagating the ground track, tiling it into download boxes, querying FDSN providers for nearby stations, and downloading the raw waveforms. Everything gets written to ``data/outputs/shenzhou15_reentry/``.
 
+Providers are chosen automatically per box, from a built-in map of where each archive actually holds stations, so a corridor anywhere in the world queries the archives relevant to it without you naming them. Pass ``providers=(...)`` to override that, or ``extra_providers=(...)`` to add to it.
+
 The ``results`` dictionary contains:
 
 - ``results["track"]`` — the propagated ground track and TLE metadata

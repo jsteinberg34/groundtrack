@@ -31,9 +31,18 @@ Before passing boxes to the download stage, groundtrack automatically drops any 
 Two-Phase Download
 ------------------
 
-The download stage runs in two phases for each box:
+Choosing Which Providers to Ask
+-------------------------------
 
-**Phase 1** queries FDSN providers for the station inventory within the box's geographic bounds. This is a cheap metadata-only request that tells us which stations exist in the area.
+Before a box can be queried at all, something has to decide *which* of the roughly thirty FDSN archives to ask. Asking a fixed few is fast but wrong outside their region: a corridor over Italy queried against three American archives finds almost nothing. Asking all of them is correct but slow, because ObsPy issues those availability queries one after another rather than in parallel, so a box's wall-clock time is the sum of its providers' response times. Individual providers range from about 0.2 to 5 seconds, and a re-entry event can have thirty or more boxes.
+
+Groundtrack resolves this with a built-in map of where each archive actually holds stations, recorded on a 5 degree grid. A box floor-divides its own corners to get the handful of grid cells it covers, looks those up, and queries only the archives present in them, ordered by how many stations each holds inside that box. EarthScope is always queried and always last, so a box never resolves to nothing.
+
+The lookup is arithmetic and a couple of dictionary reads, with no network request, so provider choice is deterministic for a given release and reproducible offline. See :doc:`api/providers` for how the map is built and regenerated.
+
+The download stage then runs in two phases for each box:
+
+**Phase 1** queries the selected providers for the station inventory within the box's geographic bounds. This is a cheap metadata-only request that tells us which stations exist in the area.
 
 **Phase 2** filters that inventory by the actual cross-track distance from each station to the ground track. Only stations within the corridor threshold are kept for waveform download.
 
