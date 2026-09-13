@@ -44,10 +44,10 @@ def test_count_files_recursive(tmp_path):
 
 
 def test_make_mseed_storage_gates_on_approved(tmp_path):
-    storage = _make_mseed_storage({("XX", "AAA")}, tmp_path)
-    approved_path = storage("XX", "AAA", "", "HHZ", None, None)
-    assert approved_path == str(tmp_path / "XX.AAA..HHZ.mseed")
-    assert storage("XX", "BBB", "", "HHZ", None, None) is None
+    storage = _make_mseed_storage({("ZZ", "AAA")}, tmp_path)
+    approved_path = storage("ZZ", "AAA", "", "HHZ", None, None)
+    assert approved_path == str(tmp_path / "ZZ.AAA..HHZ.mseed")
+    assert storage("ZZ", "BBB", "", "HHZ", None, None) is None
 
 
 def _request(box_id="box_000"):
@@ -67,7 +67,7 @@ def _request(box_id="box_000"):
 # --------------------------------------------------------------------------- #
 
 def test_query_provider_writes_stationxml_and_returns_path(tmp_path):
-    client = FakeFDSNClient([("XX", "STA", 0.0, 0.0)])
+    client = FakeFDSNClient([("ZZ", "STA", 0.0, 0.0)])
     xml_path = _query_provider("MYPROVIDER", client, _request(), ["HHZ", "BHZ"], tmp_path)
     assert xml_path == tmp_path / "MYPROVIDER_stations.xml"
     assert xml_path.exists()
@@ -105,7 +105,7 @@ def _patch_clients(monkeypatch, stations, mdl=FakeMassDownloader):
 
 
 # Two candidate stations: NEAR (~55 km off the equator track) and FAR (~555 km).
-STATIONS = [("XX", "NEAR", 0.5, 5.0), ("XX", "FAR", 5.0, 5.0)]
+STATIONS = [("ZZ", "NEAR", 0.5, 5.0), ("ZZ", "FAR", 5.0, 5.0)]
 
 
 def test_download_boxes_happy_path(tmp_path, monkeypatch, make_track):
@@ -169,7 +169,7 @@ def test_download_boxes_apply_processing(tmp_path, monkeypatch, make_track):
 
 def test_download_boxes_all_stations_rejected(tmp_path, monkeypatch, make_track):
     # Only the FAR station exists -> nothing passes the corridor filter.
-    _patch_clients(monkeypatch, [("XX", "FAR", 5.0, 5.0)])
+    _patch_clients(monkeypatch, [("ZZ", "FAR", 5.0, 5.0)])
     track = make_track(lat=0.0, lon_step=0.5, n=40)
 
     manifest = download_boxes(
@@ -258,9 +258,9 @@ def _overlapping_requests(n_boxes=3):
 
 # Three stations, all within the corridor of the equator track.
 SHARED_STATIONS = [
-    ("XX", "AAA", 0.2, 2.0),
-    ("XX", "BBB", 0.3, 5.0),
-    ("XX", "CCC", 0.4, 8.0),
+    ("ZZ", "AAA", 0.2, 2.0),
+    ("ZZ", "BBB", 0.3, 5.0),
+    ("ZZ", "CCC", 0.4, 8.0),
 ]
 
 
@@ -367,7 +367,7 @@ def test_claim_released_when_download_fails_and_reclaimed_by_later_box(
     # First box claimed all three, wrote none, and recorded the shortfall.
     assert first["claimed_station_count"] == 3
     assert first["mseed_files"] == 0
-    assert sorted(first["claimed_not_downloaded"]) == ["XX.AAA", "XX.BBB", "XX.CCC"]
+    assert sorted(first["claimed_not_downloaded"]) == ["ZZ.AAA", "ZZ.BBB", "ZZ.CCC"]
     assert "download_error" in first
 
     # Released, so the second box picks them up rather than skipping them.
@@ -388,11 +388,11 @@ def test_partial_write_keeps_claims_for_stations_already_on_disk(
             if not PartialThenRaiseMDL.raised:
                 PartialThenRaiseMDL.raised = True
                 # Write exactly one station, then fail.
-                path = mseed_storage("XX", "AAA", "", "HHZ",
+                path = mseed_storage("ZZ", "AAA", "", "HHZ",
                                      restrictions.starttime, restrictions.endtime)
                 if path:
                     from conftest import _write_min_mseed
-                    _write_min_mseed(path, "XX", "AAA", "HHZ")
+                    _write_min_mseed(path, "ZZ", "AAA", "HHZ")
                 raise RuntimeError("died after one write")
             return super().download(domain, restrictions, mseed_storage,
                                     stationxml_storage, threads_per_client)
@@ -408,7 +408,7 @@ def test_partial_write_keeps_claims_for_stations_already_on_disk(
     first, second = manifest["results"]
 
     # AAA landed, so its claim is kept; only BBB and CCC go back.
-    assert first["claimed_not_downloaded"] == ["XX.BBB", "XX.CCC"]
+    assert first["claimed_not_downloaded"] == ["ZZ.BBB", "ZZ.CCC"]
     assert second["claimed_station_count"] == 2
 
     # AAA is on disk exactly once across the whole run.
@@ -498,7 +498,7 @@ def test_concurrent_claims_never_hand_the_same_station_to_two_callers():
     from groundtrack.download import _claim_stations
 
     candidates = [
-        {"network": "XX", "station": f"S{i:03d}"} for i in range(200)
+        {"network": "ZZ", "station": f"S{i:03d}"} for i in range(200)
     ]
     claimed: set = set()
     lock = threading.Lock()
@@ -524,8 +524,8 @@ def test_release_only_returns_stations_without_files(tmp_path):
     from groundtrack.download import _claim_stations, _release_unwritten_claims
 
     stations = [
-        {"network": "XX", "station": "WROTE"},
-        {"network": "XX", "station": "MISSING"},
+        {"network": "ZZ", "station": "WROTE"},
+        {"network": "ZZ", "station": "MISSING"},
     ]
     claimed: set = set()
     lock = threading.Lock()
@@ -533,12 +533,12 @@ def test_release_only_returns_stations_without_files(tmp_path):
     mine = _claim_stations(stations, claimed, lock)
     assert len(claimed) == 2
 
-    (tmp_path / "XX.WROTE..HHZ.mseed").write_text("")
+    (tmp_path / "ZZ.WROTE..HHZ.mseed").write_text("")
 
     released = _release_unwritten_claims(mine, tmp_path, claimed, lock)
 
     assert [s["station"] for s in released] == ["MISSING"]
-    assert claimed == {("XX", "WROTE")}
+    assert claimed == {("ZZ", "WROTE")}
 
 
 @pytest.mark.parametrize("max_workers", [1, 3])
@@ -633,12 +633,12 @@ def test_skipped_box_reports_the_claims_it_retained(tmp_path, monkeypatch, make_
 def test_existing_station_keys_reads_identities_from_filenames(tmp_path):
     from groundtrack.download import _existing_station_keys
 
-    (tmp_path / "XX.AAA..HHZ.mseed").write_text("")
+    (tmp_path / "ZZ.AAA..HHZ.mseed").write_text("")
     (tmp_path / "YY.BBB.00.BHZ.mseed").write_text("")
     (tmp_path / "notes.txt").write_text("")          # ignored, not mseed
     (tmp_path / "malformed.mseed").write_text("")    # ignored, unparseable
 
-    assert _existing_station_keys(tmp_path) == {("XX", "AAA"), ("YY", "BBB")}
+    assert _existing_station_keys(tmp_path) == {("ZZ", "AAA"), ("YY", "BBB")}
 
 
 def test_max_workers_is_capped_with_a_warning(tmp_path, monkeypatch, make_track):
@@ -701,7 +701,7 @@ def test_resume_is_order_independent(
     (seeded / "stations").mkdir(parents=True)
     for net, sta, *_ in SHARED_STATIONS:
         (seeded / "waveforms" / f"{net}.{sta}..HHZ.mseed").write_text("x")
-    (seeded / "stations" / "XX.AAA.xml").write_text("x")
+    (seeded / "stations" / "ZZ.AAA.xml").write_text("x")
 
     manifest = download_boxes(
         [_request("box_000"), _request("box_001")], track,
@@ -735,7 +735,7 @@ def test_partially_downloaded_box_is_not_pre_registered(
     partial = tmp_path / "ev" / "boxes" / "box_000"
     (partial / "waveforms").mkdir(parents=True)
     (partial / "stations").mkdir(parents=True)          # no .xml -> not skipped
-    (partial / "waveforms" / "XX.AAA..HHZ.mseed").write_text("x")
+    (partial / "waveforms" / "ZZ.AAA..HHZ.mseed").write_text("x")
 
     manifest = download_boxes(
         [_request("box_000")], track, output_base=tmp_path, event_name="ev",
@@ -745,3 +745,262 @@ def test_partially_downloaded_box_is_not_pre_registered(
     box = manifest["results"][0]
     assert box["status"] == "ok"          # ran, not skipped
     assert box["claimed_station_count"] == 3
+
+
+# --------------------------------------------------------------------------- #
+# Provider selection, capability and excluded networks
+# --------------------------------------------------------------------------- #
+
+def _socal_requests(n_boxes=1):
+    """Boxes over Southern California, where auto selection has real providers."""
+    return [
+        {
+            "box_id": f"box_{i:03d}",
+            "lat_min": 33.0, "lat_max": 35.5,
+            "lon_min": -119.0, "lon_max": -116.5,
+            "t_start_utc": datetime(2020, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            "t_end_utc": datetime(2020, 1, 1, 0, 10, 0, tzinfo=timezone.utc),
+        }
+        for i in range(n_boxes)
+    ]
+
+
+def _patch_per_provider(monkeypatch, stations_by_provider, mdl=FakeMassDownloader):
+    """
+    Give each provider its own station list.
+
+    The shared fake returns the same inventory to everyone, which cannot express
+    "only this provider reported that station" -- the thing provenance and the
+    obtainability split turn on.
+    """
+    monkeypatch.setattr(
+        "groundtrack.download.Client",
+        lambda name: FakeFDSNClient(stations_by_provider.get(name, [])),
+    )
+    monkeypatch.setattr("groundtrack.download.MassDownloader", mdl)
+
+
+def test_synthetic_and_test_networks_are_never_downloaded(
+    tmp_path, monkeypatch, make_track
+):
+    """
+    SY is the FDSN-reserved code for synthetic seismograms and EARTHSCOPE serves
+    thousands of them at real coordinates. Nothing else would stop one being
+    treated as a candidate detection.
+    """
+    _patch_clients(
+        monkeypatch,
+        [("SY", "FAKE", 0.2, 2.0), ("XX", "TEST", 0.3, 5.0), ("ZZ", "REAL", 0.4, 8.0)],
+    )
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("TEST",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    downloaded = {sta for _, sta in _downloaded_station_set(tmp_path / "ev" / "boxes")}
+    assert downloaded == {"REAL"}
+
+    box = manifest["results"][0]
+    assert sorted(box["excluded_network_stations"]) == ["SY.FAKE", "XX.TEST"]
+
+
+def test_synthetic_networks_excluded_even_when_provider_named_explicitly(
+    tmp_path, monkeypatch, make_track
+):
+    """Naming the host provider does not make its synthetic networks downloadable."""
+    _patch_clients(monkeypatch, [("SY", "FAKE", 0.2, 2.0)])
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    download_boxes(
+        _overlapping_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("EARTHSCOPE",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    assert _downloaded_station_set(tmp_path / "ev" / "boxes") == set()
+
+
+def test_station_only_from_a_metadata_only_provider_is_not_claimed(
+    tmp_path, monkeypatch, make_track
+):
+    """
+    KAGSR and USP serve station metadata but no waveforms. Claiming a station
+    only they reported would take ownership that can never be honoured, and the
+    claim would stop every other box from trying.
+    """
+    _patch_per_provider(monkeypatch, {"KAGSR": [("ZZ", "ONLYMETA", 0.2, 2.0)]})
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("KAGSR",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    box = manifest["results"][0]
+    assert box["claimed_station_count"] == 0
+    assert box["discovered_not_obtainable"] == ["ZZ.ONLYMETA"]
+    assert manifest["unique_stations_claimed"] == 0
+    # Still reported as near the box: it is a real station, just unobtainable.
+    assert box["filtered_station_count"] == 1
+
+
+def test_station_from_both_provider_kinds_is_claimed_normally(
+    tmp_path, monkeypatch, make_track
+):
+    _patch_per_provider(
+        monkeypatch,
+        {
+            "KAGSR": [("ZZ", "SHARED", 0.2, 2.0)],
+            "EARTHSCOPE": [("ZZ", "SHARED", 0.2, 2.0)],
+        },
+    )
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("KAGSR", "EARTHSCOPE"), corridor_km=100.0, verbose=False,
+        max_workers=1,
+    )
+
+    box = manifest["results"][0]
+    assert box["claimed_station_count"] == 1
+    assert box["discovered_not_obtainable"] == []
+    downloaded = {sta for _, sta in _downloaded_station_set(tmp_path / "ev" / "boxes")}
+    assert downloaded == {"SHARED"}
+
+
+def test_metadata_only_provider_still_contributes_to_discovery(
+    tmp_path, monkeypatch, make_track
+):
+    """
+    "Instruments exist near this corridor" is a real result even when the
+    waveforms cannot be fetched, so these providers are still queried.
+    """
+    _patch_per_provider(
+        monkeypatch,
+        {
+            "KAGSR": [("ZZ", "METAONLY", 0.2, 2.0)],
+            "EARTHSCOPE": [("ZZ", "NORMAL", 0.3, 5.0)],
+        },
+    )
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("KAGSR", "EARTHSCOPE"), corridor_km=100.0, verbose=False,
+        max_workers=1,
+    )
+
+    box = manifest["results"][0]
+    # Both appear as nearby stations; only one is obtainable.
+    assert box["filtered_station_count"] == 2
+    assert box["discovered_not_obtainable"] == ["ZZ.METAONLY"]
+    assert box["claimed_station_count"] == 1
+
+    stations_dir = tmp_path / "ev" / "boxes" / "box_000" / "stations"
+    assert (stations_dir / "KAGSR_stations.xml").exists()
+
+
+def test_manifest_records_provider_selection_per_box(
+    tmp_path, monkeypatch, make_track
+):
+    """
+    A box returning nothing must be distinguishable from a box where the one
+    relevant provider was never asked.
+    """
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(2), track, output_base=tmp_path, event_name="ev",
+        providers=("SCEDC",), corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    assert manifest["provider_selection_mode"] == "explicit"
+    assert manifest["provider_regions_generated_utc"]
+
+    for box in manifest["results"]:
+        assert box["providers_queried"] == ["SCEDC"]
+        # Nothing was skipped *by region*: the caller chose the list. Reporting
+        # the rest of the inventory here would describe that choice wrongly.
+        assert box["providers_skipped_by_region"] == []
+
+
+def test_provider_that_fails_to_initialize_is_not_reported_as_queried(
+    tmp_path, monkeypatch, make_track
+):
+    """
+    The manifest must not assert a query that never happened. A provider whose
+    client could not be built is absent from providers_queried rather than
+    silently listed alongside the ones that were actually reached.
+    """
+    def flaky(name):
+        if name == "NCEDC":
+            raise RuntimeError("simulated init failure")
+        return FakeFDSNClient(SHARED_STATIONS)
+
+    monkeypatch.setattr("groundtrack.download.Client", flaky)
+    monkeypatch.setattr("groundtrack.download.MassDownloader", FakeMassDownloader)
+    track = make_track(lat=34.0, lon_start=-119.0, lon_step=0.05, n=40)
+
+    manifest = download_boxes(
+        _socal_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=("SCEDC", "NCEDC"), corridor_km=100.0, verbose=False,
+        max_workers=1,
+    )
+
+    queried = manifest["results"][0]["providers_queried"]
+    assert "SCEDC" in queried
+    assert "NCEDC" not in queried
+
+
+def test_auto_selection_queries_only_region_relevant_providers(
+    tmp_path, monkeypatch, make_track
+):
+    """Auto mode end to end: a Californian corridor must not query Italy."""
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=34.0, lon_start=-119.0, lon_step=0.05, n=40)
+
+    manifest = download_boxes(
+        _socal_requests(1), track, output_base=tmp_path, event_name="ev",
+        corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    assert manifest["provider_selection_mode"] == "auto"
+    box = manifest["results"][0]
+    assert "EARTHSCOPE" in box["providers_queried"]
+    assert "INGV" not in box["providers_queried"]
+    assert "INGV" in box["providers_skipped_by_region"]
+
+
+def test_extra_providers_are_added_to_auto_selection(
+    tmp_path, monkeypatch, make_track
+):
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=34.0, lon_start=-119.0, lon_step=0.05, n=40)
+
+    manifest = download_boxes(
+        _socal_requests(1), track, output_base=tmp_path, event_name="ev",
+        extra_providers=("RASPISHAKE",), corridor_km=100.0, verbose=False,
+        max_workers=1,
+    )
+
+    box = manifest["results"][0]
+    assert box["providers_queried"][-1] == "RASPISHAKE"
+    assert "EARTHSCOPE" in box["providers_queried"]
+    assert manifest["extra_providers"] == ["RASPISHAKE"]
+
+
+def test_providers_none_behaves_as_auto(tmp_path, monkeypatch, make_track):
+    """It used to yield an empty provider list, so the run downloaded nothing."""
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=34.0, lon_start=-119.0, lon_step=0.05, n=40)
+
+    manifest = download_boxes(
+        _socal_requests(1), track, output_base=tmp_path, event_name="ev",
+        providers=None, corridor_km=100.0, verbose=False, max_workers=1,
+    )
+
+    assert manifest["provider_selection_mode"] == "auto"
+    assert manifest["results"][0]["providers_queried"]

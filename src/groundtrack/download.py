@@ -5,7 +5,7 @@ import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
@@ -20,6 +20,15 @@ from .stations import (
     parse_stationxml_files,
     deduplicate_stations,
     filter_stations_by_track_distance,
+)
+
+from .providers import (
+    AUTO,
+    EXCLUDED_NETWORKS,
+    resolve_providers,
+    serves_waveforms,
+    skipped_by_region,
+    REGIONS_GENERATED_UTC,
 )
 
 from .processing import (
@@ -40,12 +49,30 @@ def _normalize_providers(providers):
     Make sure providers are always in a clean list format.
 
     Why:
-    ObsPy expects provider names as strings. This avoids weird behavior if
-    something else gets passed in accidentally.
+    ObsPy accepts either a provider short name or an already-initialized
+    ``Client``, and we rely on the second form to avoid re-running service
+    discovery for every box. ``str()`` on a Client would turn it into its repr
+    and break that, so instances are passed through untouched and only other
+    values are coerced.
+
+    ``None`` and the "auto" sentinel are handled by the caller before this
+    point; they are not provider names.
+
+    Clients are recognised by duck typing rather than ``isinstance(p, Client)``
+    so that test doubles and any other client-shaped object work the same way.
     """
     if providers is None:
         return []
-    return [str(p) for p in providers]
+
+    normalized = []
+    for p in providers:
+        if isinstance(p, str):
+            normalized.append(p)
+        elif hasattr(p, "get_stations"):
+            normalized.append(p)
+        else:
+            normalized.append(str(p))
+    return normalized
 
 
 def _count_files(path: Path, pattern: str) -> int:
@@ -102,6 +129,90 @@ def _query_provider(
     xml_path = inv_dir / f"{provider_name}_stations.xml"
     inv.write(str(xml_path), format="STATIONXML")
     return xml_path
+
+
+_STATIONXML_SUFFIX = "_stations.xml"
+
+
+def _provider_from_stationxml(source_xml: str | Path | None) -> str | None:
+    """
+    Recover which provider reported a station, from the file it was parsed out of.
+
+    Stage 1 writes one inventory file per provider as ``{provider}_stations.xml``
+    and ``parse_stationxml_files`` already records ``source_xml`` on every row,
+    so provenance is available without any new plumbing.
+    """
+    if not source_xml:
+        return None
+    name = Path(source_xml).name
+    if name.endswith(_STATIONXML_SUFFIX):
+        return name[: -len(_STATIONXML_SUFFIX)] or None
+    return None
+
+
+def _providers_by_station(station_rows: Iterable[dict]) -> dict[tuple[str, str], set[str]]:
+    """
+    Every provider that reported each station, before deduplication.
+
+    Deduplication collapses a station to one row and so forgets that a second
+    provider also had it. That fact is what decides whether the station is
+    obtainable, since one of those providers may serve waveforms even if the
+    other does not, so it has to be gathered from the raw rows.
+    """
+    by_station: dict[tuple[str, str], set[str]] = {}
+    for row in station_rows:
+        provider = _provider_from_stationxml(row.get("source_xml"))
+        if provider is None:
+            continue
+        by_station.setdefault((row["network"], row["station"]), set()).add(provider)
+    return by_station
+
+
+def _drop_excluded_networks(station_rows: Iterable[dict]) -> tuple[list[dict], list[str]]:
+    """
+    Remove stations in reserved synthetic or test networks.
+
+    ``SY`` is the FDSN-reserved code for synthetic seismograms and EARTHSCOPE
+    serves thousands of them carrying real-looking coordinates. Nothing else in
+    the pipeline would stop one passing the corridor filter and being processed
+    as a candidate detection, so they are dropped at discovery, in every
+    selection mode, including when the caller named the host provider itself.
+    """
+    kept: list[dict] = []
+    dropped: list[str] = []
+    for row in station_rows:
+        if row["network"] in EXCLUDED_NETWORKS:
+            dropped.append(f"{row['network']}.{row['station']}")
+        else:
+            kept.append(row)
+    return kept, sorted(set(dropped))
+
+
+def _split_obtainable(
+    stations: Iterable[dict],
+    providers_by_station: Mapping[tuple[str, str], set[str]],
+) -> tuple[list[dict], list[str]]:
+    """
+    Separate stations some provider can actually serve from those none can.
+
+    A station known only to a metadata-only provider (KAGSR, USP) must not be
+    claimed: ``MassDownloader`` drops those providers entirely because it
+    requires both a station and a dataselect service, so the claim could never
+    be honoured, and the claim itself would stop any other box from trying. The
+    station is still real and still reported, just under its own heading.
+    """
+    obtainable: list[dict] = []
+    not_obtainable: list[str] = []
+    for row in stations:
+        key = (row["network"], row["station"])
+        reporters = providers_by_station.get(key)
+        # No provenance recorded (an explicitly supplied inventory, say) means
+        # we cannot prove it unobtainable, so it keeps its normal path.
+        if reporters is None or any(serves_waveforms(p) for p in reporters):
+            obtainable.append(row)
+        else:
+            not_obtainable.append(f"{key[0]}.{key[1]}")
+    return obtainable, sorted(set(not_obtainable))
 
 
 # Upper bound on concurrent boxes. Each worker opens up to threads_per_client
@@ -228,7 +339,8 @@ def _process_one_box(
     boxes_root: Path,
     track_points,
     clients: dict,
-    provider_names: Sequence[str],
+    box_providers: Sequence[str],
+    auto_selection: bool,
     corridor_km: float,
     channel_priorities: Sequence[str],
     location_priorities: Sequence[str],
@@ -254,6 +366,11 @@ def _process_one_box(
     box also builds its own MassDownloader rather than sharing one, since
     MassDownloader carries per-instance state whose thread-safety is not
     documented and instantiating it is cheap.
+
+    ``box_providers`` is this box's own ordered provider list, which is usually
+    a small subset of the run's clients. Provider count is serial latency here:
+    ObsPy runs availability queries one client after another, so querying every
+    provider for every box would multiply out badly across a 30-box event.
     """
     box_id = req["box_id"]
 
@@ -300,27 +417,49 @@ def _process_one_box(
     # ------------------------------------------------------------
     provider_stationxml_files = []
 
-    with ThreadPoolExecutor(max_workers=max(1, len(clients))) as executor:
-        futures = {
-            executor.submit(_query_provider, name, client, req, channel_priorities, inv_dir): name
-            for name, client in clients.items()
-        }
-        for future in as_completed(futures):
-            provider_name = futures[future]
-            try:
-                xml_path = future.result()
-                provider_stationxml_files.append(xml_path)
-                if verbose:
-                    print(f"    inventory from {provider_name}: saved {xml_path.name}")
-            except FDSNNoDataException:
-                if verbose:
-                    print(f"    inventory from {provider_name}: no data")
-            except Exception as e:
-                if verbose:
-                    print(f"    inventory from {provider_name}: FAILED -> {repr(e)}")
+    # Only this box's own providers, not every client in the run. A metadata-only
+    # provider is queried here just like any other: "instruments exist near this
+    # corridor" is a real result even when the waveforms cannot be fetched.
+    box_clients = {name: clients[name] for name in box_providers if name in clients}
+
+    if box_clients:
+        with ThreadPoolExecutor(max_workers=max(1, len(box_clients))) as executor:
+            futures = {
+                executor.submit(_query_provider, name, client, req, channel_priorities, inv_dir): name
+                for name, client in box_clients.items()
+            }
+            for future in as_completed(futures):
+                provider_name = futures[future]
+                try:
+                    xml_path = future.result()
+                    provider_stationxml_files.append(xml_path)
+                    if verbose:
+                        print(f"    inventory from {provider_name}: saved {xml_path.name}")
+                except FDSNNoDataException:
+                    if verbose:
+                        print(f"    inventory from {provider_name}: no data")
+                except Exception as e:
+                    if verbose:
+                        print(f"    inventory from {provider_name}: FAILED -> {repr(e)}")
+    elif verbose:
+        print(f"    {box_id}: no usable providers, skipping inventory query")
 
     # Parse raw candidate stations from the StationXML files we just saved.
     station_rows = parse_stationxml_files(provider_stationxml_files)
+
+    # Reserved synthetic/test networks are dropped before anything else looks at
+    # them, so they cannot be claimed, downloaded, or counted as coverage.
+    station_rows, excluded_network_stations = _drop_excluded_networks(station_rows)
+    if verbose and excluded_network_stations:
+        print(
+            f"    {box_id}: dropped {len(excluded_network_stations)} station(s) "
+            f"in reserved networks {sorted(EXCLUDED_NETWORKS)}"
+        )
+
+    # Which providers reported each station, gathered before deduplication
+    # collapses that away. Decides what can actually be claimed.
+    reporters = _providers_by_station(station_rows)
+
     unique_stations = deduplicate_stations(station_rows)
 
     # ------------------------------------------------------------
@@ -343,8 +482,15 @@ def _process_one_box(
     # ------------------------------------------------------------
     # Stage 2b: claim the stations no other box has taken
     # ------------------------------------------------------------
-    mine = _claim_stations(kept_stations, claimed, claim_lock)
-    n_skipped_claimed_elsewhere = len(kept_stations) - len(mine)
+    # Only stations some provider here can actually serve are claimable. A
+    # station known only to a metadata-only provider would otherwise be claimed
+    # by a box that cannot fetch it, and the claim would stop every other box
+    # from trying -- the exact silent loss the claim mechanism exists to
+    # prevent, arriving through a provider capability gap instead of box overlap.
+    obtainable, discovered_not_obtainable = _split_obtainable(kept_stations, reporters)
+
+    mine = _claim_stations(obtainable, claimed, claim_lock)
+    n_skipped_claimed_elsewhere = len(obtainable) - len(mine)
 
     if verbose:
         print(
@@ -353,6 +499,11 @@ def _process_one_box(
             f"{len(mine)} claimed here | "
             f"{n_skipped_claimed_elsewhere} already owned elsewhere"
         )
+        if discovered_not_obtainable:
+            print(
+                f"    {box_id}: {len(discovered_not_obtainable)} station(s) found "
+                f"but held only by providers without a waveform service"
+            )
 
     # ------------------------------------------------------------
     # Stage 3: bulk waveform download via MassDownloader
@@ -379,7 +530,17 @@ def _process_one_box(
             minimum_length=0.9,
         )
 
-        mdl = MassDownloader(providers=list(provider_names))
+        # Pass already-initialized Client objects rather than names: ObsPy's
+        # _get_client uses an instance as-is, whereas a name makes it re-run
+        # service discovery (0.16-0.33 s per provider) for every single box.
+        # Metadata-only providers are left out because MassDownloader requires
+        # both a station and a dataselect service and would discard them anyway.
+        download_clients = [
+            clients[name]
+            for name in box_providers
+            if name in clients and serves_waveforms(name)
+        ]
+        mdl = MassDownloader(providers=download_clients)
 
         try:
             mdl.download(
@@ -420,9 +581,29 @@ def _process_one_box(
         "claimed_station_count": len(mine),
         "skipped_claimed_elsewhere_count": n_skipped_claimed_elsewhere,
         "claimed_not_downloaded": claimed_not_downloaded,
+        # Real stations in the corridor that no provider here can serve. A third
+        # category, distinct from "claimed but the download failed": these were
+        # never claimed, because claiming them would have been a promise nothing
+        # could keep.
+        "discovered_not_obtainable": discovered_not_obtainable,
+        # Which providers this box actually asked, in the order it asked them,
+        # and which known providers its geography ruled out. Without the second,
+        # a box returning nothing is indistinguishable from a box where the one
+        # relevant provider was never queried.
+        #
+        # This is what was *reached*, not what was selected: a provider whose
+        # client failed to initialize is absent from box_clients and must not be
+        # reported as queried, or the manifest would assert a query that never
+        # happened. The failure itself is logged when it occurs.
+        "providers_queried": list(box_clients),
+        "providers_skipped_by_region": skipped_by_region(
+            req, box_providers, auto=auto_selection
+        ),
         "mseed_files": new_mseed,
         "stationxml_files": new_xml,
     }
+    if excluded_network_stations:
+        box_result["excluded_network_stations"] = excluded_network_stations
 
     if download_error is not None:
         box_result["download_error"] = download_error
@@ -455,7 +636,14 @@ def download_boxes(
     output_base: str | Path,
     event_name: str,
     corridor_km: float = 100.0,
-    providers: Sequence[str] | None = ("EARTHSCOPE",),
+    # "auto" selects providers per box from where they actually hold stations.
+    # An explicit sequence replaces that entirely and is used in the order
+    # given. None means "auto" as well: it used to yield an empty list, so a run
+    # silently downloaded nothing.
+    providers: Sequence[str] | str | None = AUTO,
+    # Always queried, never region-filtered, ranked last. This is how an amateur
+    # network is layered on top of automatic selection without replacing it.
+    extra_providers: Sequence[str] = (),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
@@ -538,7 +726,19 @@ def download_boxes(
     boxes_root = run_folder / "boxes"
     boxes_root.mkdir(parents=True, exist_ok=True)
 
-    provider_names = _normalize_providers(providers)
+    # Resolve each box's own provider list up front. Doing it here rather than
+    # inside the workers means clients can be built once for the whole run: a
+    # box's list is usually a small subset, but the union across boxes is what
+    # actually needs initializing.
+    selection_mode = "explicit" if (providers is not None and providers != AUTO) else AUTO
+    providers_by_box = {
+        req["box_id"]: resolve_providers(req, providers, extra_providers)
+        for req in requests
+    }
+
+    provider_names = _normalize_providers(
+        dict.fromkeys(p for names in providers_by_box.values() for p in names)
+    )
 
     # Initialize provider clients once up front.
     clients = {}
@@ -548,6 +748,13 @@ def download_boxes(
         except Exception as e:
             if verbose:
                 print(f"Could not initialize provider {provider_name}: {repr(e)}")
+
+    if verbose:
+        per_box = [len(v) for v in providers_by_box.values()] or [0]
+        print(
+            f"Providers ({selection_mode}): {len(clients)} initialized, "
+            f"{sum(per_box) / len(per_box):.1f} per box on average"
+        )
 
     # Shared across every box in this run: the set of stations already spoken
     # for, and the lock guarding it. Local to this call, never module state --
@@ -601,7 +808,8 @@ def download_boxes(
             boxes_root=boxes_root,
             track_points=track_points,
             clients=clients,
-            provider_names=provider_names,
+            box_providers=providers_by_box[req["box_id"]],
+            auto_selection=(selection_mode == AUTO),
             corridor_km=corridor_km,
             channel_priorities=channel_priorities,
             location_priorities=location_priorities,
@@ -670,7 +878,16 @@ def download_boxes(
         "run_folder": str(run_folder),
         "boxes_root": str(boxes_root),
         "total_requests": len(requests),
-        "providers": provider_names,
+        # Retained with its original type and rough meaning ("what this run
+        # talked to") for anything already parsing manifests. Selection is now
+        # per box, so this is the union across boxes; the per-box detail is in
+        # each result's providers_queried.
+        "providers": [p for p in provider_names if isinstance(p, str)],
+        "provider_selection_mode": selection_mode,
+        "extra_providers": [str(p) for p in extra_providers],
+        # Which build of the region map produced this run's selection, so a past
+        # run's provider choice can be reconstructed later.
+        "provider_regions_generated_utc": REGIONS_GENERATED_UTC,
         "channel_priorities": list(channel_priorities),
         "location_priorities": list(location_priorities),
         "corridor_km": corridor_km,
