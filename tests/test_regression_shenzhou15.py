@@ -114,7 +114,7 @@ def _stations_on_track(track, every=120):
     """Synthetic stations sitting on the real ground track, so they are
     genuinely inside the corridor of more than one box."""
     return [
-        ("XX", f"S{i:04d}", track[i].lat, track[i].lon)
+        ("ZZ", f"S{i:04d}", track[i].lat, track[i].lon)
         for i in range(0, len(track), every)
     ]
 

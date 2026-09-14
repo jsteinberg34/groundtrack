@@ -86,17 +86,17 @@ def test_response_removal_succeeds_with_matching_inventory(
 
 
 def test_unmatched_trace_is_recorded_and_skipped(make_stream, synthetic_inventory):
-    # Inventory only knows about XX.ABC; the stream also has XX.ZZZ.
+    # Inventory only knows about ZZ.ABC; the stream also has ZZ.ZZZ.
     inv = synthetic_inventory(station="ABC")
     stream = make_stream([{"station": "ABC"}, {"station": "ZZZ"}])
 
     processed, errors = process_stream(stream, inv, verbose=False)
 
     out_ids = [tr.id for tr in processed]
-    assert any(tr_id.startswith("XX.ABC") for tr_id in out_ids)
-    assert all(not tr_id.startswith("XX.ZZZ") for tr_id in out_ids)
+    assert any(tr_id.startswith("ZZ.ABC") for tr_id in out_ids)
+    assert all(not tr_id.startswith("ZZ.ZZZ") for tr_id in out_ids)
 
-    bad = [e for e in errors if e["trace_id"].startswith("XX.ZZZ")]
+    bad = [e for e in errors if e["trace_id"].startswith("ZZ.ZZZ")]
     assert len(bad) == 1
     assert bad[0]["stage"] == "remove_response"
 
@@ -159,7 +159,7 @@ def test_load_box_inventory_merges_per_station_and_skips_summaries(
 
     # Per-station response file -> merged.
     synthetic_inventory(station="ABC").write(
-        str(inv_dir / "XX.ABC.xml"), format="STATIONXML"
+        str(inv_dir / "ZZ.ABC.xml"), format="STATIONXML"
     )
     # Provider summary file (stem has no dot) -> skipped, never read.
     (inv_dir / "EARTHSCOPE_stations.xml").write_text("<not-real-stationxml/>")
@@ -177,10 +177,10 @@ def test_load_box_inventory_merges_multiple_stations(tmp_path, synthetic_invento
 
     # Two per-station files exercise the merge-into-existing branch.
     synthetic_inventory(station="ABC").write(
-        str(inv_dir / "XX.ABC.xml"), format="STATIONXML"
+        str(inv_dir / "ZZ.ABC.xml"), format="STATIONXML"
     )
     synthetic_inventory(station="DEF").write(
-        str(inv_dir / "XX.DEF.xml"), format="STATIONXML"
+        str(inv_dir / "ZZ.DEF.xml"), format="STATIONXML"
     )
 
     merged = _load_box_inventory(inv_dir)

@@ -7,6 +7,7 @@ API Reference
    pipeline
    track
    tiling
+   providers
    download
    processing
    stations

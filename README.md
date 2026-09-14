@@ -190,6 +190,84 @@ results = run_pipeline(
 )
 ```
 
+### Choosing Data Providers
+
+By default (`providers="auto"`) the library picks providers per box from a
+built-in map of where each FDSN archive actually holds stations. A corridor over
+Italy queries INGV, ORFEUS and GEOFON; one over Texas queries TEXNET. Selection
+is offline and deterministic for a given release, so it adds no latency and
+reproduces exactly.
+
+```python
+# Auto (default) - region-selected, plus EarthScope everywhere
+run_pipeline(..., providers="auto")
+
+# Explicit - exactly these, in this order, no region filtering
+run_pipeline(..., providers=("SCEDC", "NCEDC", "EARTHSCOPE"))
+
+# Auto plus one more, always queried regardless of region
+run_pipeline(..., extra_providers=("RASPISHAKE",))
+```
+
+Providers are ordered by how many stations they hold inside each box, with
+EarthScope last, because a regional archive usually has fresher metadata for its
+own network. `extra_providers` rank last of all. Each box's manifest records
+`providers_queried` and `providers_skipped_by_region`, so a box that found
+nothing can be told apart from a box where the relevant provider was never
+asked.
+
+**Supported with `providers="auto"`** (26 archives). `EARTHSCOPE` is queried for
+every box; the rest are selected by region:
+
+| | | |
+|---|---|---|
+| `EARTHSCOPE` *(always)* | `IESDMC` Taiwan | `NIEP` Romania |
+| `AUSPASS` Australia | `IGN` Spain | `NOA` Greece |
+| `BGR` Germany | `INGV` Italy | `NRCAN` Canada |
+| `BGS` United Kingdom | `IPGP` France, overseas | `ORFEUS` Europe (ODC) |
+| `EPOSFR` France | `KAGSR` Kamchatka \* | `SCEDC` S. California |
+| `ETH` Switzerland | `KNMI` Netherlands | `TEXNET` Texas |
+| `GEOFON` Germany, global | `KOERI` Turkey | `UIB-NORSAR` Norway |
+| `GEONET` New Zealand | `LMU` Germany | `USP` Brazil \* |
+| `ICGC` Catalonia | `NCEDC` N. California | |
+
+\* `KAGSR` and `USP` publish station metadata but serve no waveforms. They are
+still queried, since knowing instruments exist near a corridor is a real result,
+but nothing depends on them for data.
+
+Region labels say where an archive is based, not where its coverage stops:
+`GEOFON` holds instruments across Africa, Asia and Antarctica, and `SCEDC`
+reaches well beyond Southern California. The selection map is measured from real
+holdings rather than drawn from these labels.
+
+Not selected automatically, but available by name: `RASPISHAKE` (citizen
+science), `IRISPH5` (nodal), `USGS`/`EMSC`/`ISC` (event catalogues only), and
+`EIDA` (a router). `IRIS`, `EARTHSCOPE+USGS`, `GFZ`, `ODC` and `RESIF` are alternative
+names for archives already listed.
+
+#### Querying Raspberry Shake
+
+Adding the provider is not enough on its own. Raspberry Shakes are short-period
+instruments whose channels are `EHZ` and `SHZ`; they have never carried `HHZ` or
+`BHZ`, so the default `channel_priorities` filters them out at both discovery
+and download and you would silently get nothing. Widen the channels too:
+
+```python
+run_pipeline(
+    ...,
+    extra_providers=("RASPISHAKE",),
+    channel_priorities=("HHZ", "BHZ", "EHZ", "SHZ"),
+)
+```
+
+Appending rather than replacing matters: `channel_priorities` is a priority
+list, so professional stations still match `HHZ` first and only the shakes fall
+through to `EHZ`. (`ENZ` is deliberately omitted — every Shake with an
+accelerometer also has `EHZ`, so it would never be selected.)
+
+Note that Raspberry Shake data is high volume and variable quality, and the
+default gap rejection discards a meaningful fraction of it.
+
 ### Two-Step Workflow
 
 Download first, process later with different parameters:

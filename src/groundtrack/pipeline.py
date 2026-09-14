@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+from .providers import AUTO
 from .processing import (
     DEFAULT_PRE_FILT_LOW,
     DEFAULT_WATER_LEVEL,
@@ -51,7 +52,11 @@ def run_pipeline(
     pre_pad_minutes: float = 2.0,
     post_pad_minutes: float = 13.0,
     # --- Download ---
-    providers: Sequence[str] = ("EARTHSCOPE", "SCEDC", "NCEDC"),
+    # "auto" picks providers per box from where each one actually holds
+    # stations, so a re-entry outside the US no longer queries three US
+    # archives and finds nothing. Pass an explicit sequence to override.
+    providers: Sequence[str] | str | None = AUTO,
+    extra_providers: Sequence[str] = (),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
     location_priorities: Sequence[str] = ("", "00", "10", "20"),
     overwrite_existing: bool = False,
@@ -105,6 +110,18 @@ def run_pipeline(
                         named event_name will be created here.
         event_name:     Name for this run, used as the output folder name.
                         e.g. "shenzhou15_reentry"
+        providers:      Which FDSN archives to query. "auto" (the default, and
+                        what None means) picks them per box from a built-in map
+                        of where each archive holds stations, so a corridor
+                        anywhere in the world reaches the relevant ones without
+                        being named. An explicit sequence replaces that and is
+                        used in the order given.
+        extra_providers: Queried for every box on top of whatever `providers`
+                        resolves to, never region-filtered, and ranked last.
+                        Use for citizen-science networks, e.g.
+                        extra_providers=("RASPISHAKE",) — note that also needs
+                        channel_priorities widened to include "EHZ" and "SHZ",
+                        since Raspberry Shakes never carry "HHZ" or "BHZ".
 
     Returns:
         dict with keys:
@@ -164,6 +181,7 @@ def run_pipeline(
         event_name=event_name,
         corridor_km=corridor_km,
         providers=providers,
+        extra_providers=extra_providers,
         channel_priorities=channel_priorities,
         location_priorities=location_priorities,
         overwrite_existing=overwrite_existing,

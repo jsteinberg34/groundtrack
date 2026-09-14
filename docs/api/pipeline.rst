@@ -39,7 +39,8 @@ Parameters Reference
 
 **Download**
 
-- ``providers`` (default: ``("EARTHSCOPE", "SCEDC", "NCEDC")``) — FDSN data providers to query
+- ``providers`` (default: ``"auto"``) — FDSN data providers to query. ``"auto"`` selects them per box from where each archive actually holds stations (see :doc:`providers`); an explicit sequence replaces that entirely and is used in the order given. ``None`` also means ``"auto"``
+- ``extra_providers`` (default: ``()``) — queried for every box in addition to the above, never region-filtered, ranked last. Use this to layer a citizen-science network onto automatic selection
 - ``channel_priorities`` (default: ``("HHZ", "BHZ")``) — channel preference order
 - ``location_priorities`` (default: ``("", "00", "10", "20")``) — location code preference order
 - ``overwrite_existing`` (default: ``False``) — if ``False``, existing waveforms are skipped
