@@ -1,6 +1,17 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- **The download window is now derived from published acoustic measurements rather than a fixed constant, and two defaults change.** ``post_pad_minutes`` defaults to ``None``, meaning it is computed as ``min(sqrt(corridor_km**2 + 100**2), 215) / celerity_km_s + margin_seconds``. All three constants come from Neidhart et al. (2021), *PASA* **38**, e016: 215 km is the distance beyond which they observed no unambiguous seismic signal from a fireball (a "direct air distance", so a true slant range), 0.30 km/s is their stated celerity, and 100 km is the continuum-flow limit above which no shock can form. Passing an explicit ``post_pad_minutes`` overrides the derivation exactly.
+- **``corridor_km`` defaults to 200 km, raised from 100 km.** This is a deliberate trade: roughly twice the stations queried per box, in exchange for coverage out to the edge of the published detectability envelope. Expect download volume to roughly double. Passing ``corridor_km=100, post_pad_minutes=13`` restores the previous behaviour exactly.
+- The derived post-pad at the new default is 12.94 minutes, against the previous fixed 13, so the window length itself barely moves. At a narrower corridor it shortens: 11.02 minutes at 150 km, 8.86 at 100 km, 7.21 at 50 km. The previous fixed value did not respond to ``corridor_km`` at all.
+- Added ``celerity_km_s`` (default 0.30) and ``margin_seconds`` (default 60) to ``track_to_box_windows`` and ``run_pipeline``. Celerity is the largest single lever here: the source paper's stated ±60 m/s spans 10.95 to 15.93 minutes of pad at a 200 km corridor.
+- Two silent-failure modes now warn. Supplying a ``post_pad_minutes`` shorter than the corridor requires warns, because an arrival landing after ``t_download_end`` is simply absent from the data with nothing marking it as clipped. Supplying a ``corridor_km`` above 210 km warns, since the object is always at altitude and no ground offset beyond that is consistent with the 215 km envelope.
+- ``derive_post_pad_minutes`` and ``max_corridor_km`` are exported so a caller can check what window a configuration implies before running. The three acoustic constants are deliberately **not** exposed as parameters: they are published survey results, not preferences, and the only motive to lower them is downloading less data.
+- ``derive_post_pad_minutes`` raises ``ValueError`` on a non-positive celerity or a negative corridor or margin. A negative celerity previously produced a negative pad, which would place ``t_download_end`` before ``t_exit`` and yield an inverted window indistinguishable from a short download.
+
 0.4.0 (2026-09-11)
 ------------------
 
