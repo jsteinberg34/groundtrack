@@ -181,7 +181,7 @@ results = run_pipeline(
     cache_dir="data/cache",
     output_dir="data/outputs",
     event_name="shenzhou15_reentry",
-    corridor_km=100.0,          # station inclusion threshold
+    corridor_km=200.0,          # station inclusion threshold (default)
     chunk_km=300.0,             # along-track box size
     max_workers=3,              # boxes downloaded concurrently (1 = sequential)
     apply_processing=True,      # remove instrument response + bandpass
@@ -189,6 +189,51 @@ results = run_pipeline(
     freqmax=20.0,               # bandpass upper corner (Hz)
 )
 ```
+
+### How Long Each Box Is Downloaded For
+
+The download window trails each box by an acoustic travel time, not a fixed
+constant: a shock generated while the object passes reaches a station at
+roughly 0.3 km/s, long after the object itself has gone. By default
+`post_pad_minutes` is derived from the corridor:
+
+```
+post_pad = min(sqrt(corridor_km² + 100²), 215) / celerity_km_s + margin_seconds
+```
+
+All three constants come from Neidhart et al. (2021), *PASA* **38**, e016:
+**215 km** is the distance beyond which they observed no unambiguous seismic
+signal from a fireball (stated as a "direct air distance", so a true slant
+range), **0.30 km/s** is their reported celerity, and **100 km** is the
+continuum-flow limit above which no shock can form at all.
+
+| `corridor_km` | derived post-pad |
+|---|---|
+| 50 km | 7.21 min |
+| 100 km | 8.86 min |
+| 150 km | 11.02 min |
+| 200 km (default) | 12.94 min |
+
+Above roughly 190 km the 215 km envelope binds and the pad stops growing,
+since no signal has ever been observed from farther away.
+
+```python
+from groundtrack import derive_post_pad_minutes, max_corridor_km
+
+derive_post_pad_minutes(corridor_km=150.0)   # 11.02, check before running
+max_corridor_km()                            # 210.0, the widest defensible corridor
+```
+
+**Celerity is the largest lever here.** The source paper's stated ±60 m/s
+spans 10.95 to 15.93 minutes of pad at the default corridor, so
+`celerity_km_s` is exposed for callers who know their event's atmospheric
+conditions. The 215 km and 100 km constants are deliberately *not* tunable:
+they are published survey results rather than preferences.
+
+Passing `post_pad_minutes` explicitly overrides the derivation exactly. A
+value shorter than the corridor requires will warn, because an arrival
+landing after the window ends is simply absent from the data with nothing to
+mark it as clipped.
 
 ### Choosing Data Providers
 
