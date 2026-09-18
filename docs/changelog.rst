@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+0.5.0 (2026-09-18)
+------------------
 
 - **The download window is now derived from published acoustic measurements rather than a fixed constant, and two defaults change.** ``post_pad_minutes`` defaults to ``None``, meaning it is computed as ``min(sqrt(corridor_km**2 + 100**2), 215) / celerity_km_s + margin_seconds``. All three constants come from Neidhart et al. (2021), *PASA* **38**, e016: 215 km is the distance beyond which they observed no unambiguous seismic signal from a fireball (a "direct air distance", so a true slant range), 0.30 km/s is their stated celerity, and 100 km is the continuum-flow limit above which no shock can form. Passing an explicit ``post_pad_minutes`` overrides the derivation exactly.
 - **``corridor_km`` defaults to 200 km, raised from 100 km.** This is a deliberate trade: roughly twice the stations queried per box, in exchange for coverage out to the edge of the published detectability envelope. Expect download volume to roughly double. Passing ``corridor_km=100, post_pad_minutes=13`` restores the previous behaviour exactly.
