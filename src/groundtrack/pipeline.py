@@ -5,6 +5,11 @@ from pathlib import Path
 from typing import Sequence
 
 from .providers import AUTO
+from .tiling import (
+    DEFAULT_CORRIDOR_KM,
+    DEFAULT_CELERITY_KM_S,
+    DEFAULT_MARGIN_SECONDS,
+)
 from .processing import (
     DEFAULT_PRE_FILT_LOW,
     DEFAULT_WATER_LEVEL,
@@ -48,9 +53,11 @@ def run_pipeline(
     # --- Tiling ---
     chunk_km: float = 300.0,
     overlap_km: float = 50.0,
-    corridor_km: float = 100.0,
+    corridor_km: float = DEFAULT_CORRIDOR_KM,
     pre_pad_minutes: float = 2.0,
-    post_pad_minutes: float = 13.0,
+    post_pad_minutes: float | None = None,
+    celerity_km_s: float = DEFAULT_CELERITY_KM_S,
+    margin_seconds: float = DEFAULT_MARGIN_SECONDS,
     # --- Download ---
     # "auto" picks providers per box from where each one actually holds
     # stations, so a re-entry outside the US no longer queries three US
@@ -165,6 +172,8 @@ def run_pipeline(
         corridor_km=corridor_km,
         pre_pad_minutes=pre_pad_minutes,
         post_pad_minutes=post_pad_minutes,
+        celerity_km_s=celerity_km_s,
+        margin_seconds=margin_seconds,
     )
 
     if verbose:
