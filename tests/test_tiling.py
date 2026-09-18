@@ -6,6 +6,7 @@ box bounds, short-track / invalid-parameter edge cases, the download-request
 conversion, and the ocean-box filter. Uses obspy's CPU-only geodesy -- no network.
 """
 
+import warnings
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -15,6 +16,8 @@ from groundtrack.tiling import (
     track_to_box_windows,
     box_windows_to_download_requests,
     filter_ocean_boxes,
+    derive_post_pad_minutes,
+    max_corridor_km,
 )
 from groundtrack.types import GeoBox, BoxWindow, TrackPoint
 
@@ -97,9 +100,11 @@ def test_box_window_times_and_counts(equator_track):
 
     assert w.t_enter == chunk[0].time
     assert w.t_exit == chunk[-1].time
-    # Download window equals the pass window padded by the defaults (2 / 13).
+    # Pre-pad is the fixed default; post-pad is derived from corridor_km.
     assert w.t_download_start == w.t_enter - timedelta(minutes=2)
-    assert w.t_download_end == w.t_exit + timedelta(minutes=13)
+    assert w.t_download_end == w.t_exit + timedelta(
+        minutes=derive_post_pad_minutes(corridor_km=100.0)
+    )
     assert w.n_points == w.last_track_index - w.first_track_index + 1
     assert w.n_points == len(chunk)
 
@@ -236,3 +241,142 @@ def test_skip_ocean_default_is_true(equator_track):
     implicit = track_to_box_windows(equator_track)
     explicit = track_to_box_windows(equator_track, skip_ocean=True)
     assert len(implicit) == len(explicit)
+
+
+# --------------------------------------------------------------------------- #
+# Derived post-pad
+#
+# The post-pad is an acoustic travel time: the slant range from the object to
+# the farthest station in the corridor, divided by the celerity. Constants come
+# from Neidhart et al. (2021). See the change's evidence.md for the numbers
+# these tests pin.
+# --------------------------------------------------------------------------- #
+
+def test_derived_post_pad_grows_with_corridor_below_the_cap():
+    # Below the envelope cap the slant range, and so the pad, tracks corridor width.
+    assert derive_post_pad_minutes(corridor_km=50.0) < derive_post_pad_minutes(
+        corridor_km=100.0
+    )
+    assert derive_post_pad_minutes(corridor_km=100.0) < derive_post_pad_minutes(
+        corridor_km=150.0
+    )
+
+
+def test_derived_post_pad_is_capped_by_the_envelope():
+    # Past the envelope no signal has ever been observed, so the pad stops growing.
+    assert derive_post_pad_minutes(corridor_km=250.0) == pytest.approx(
+        derive_post_pad_minutes(corridor_km=400.0)
+    )
+
+
+def test_derived_post_pad_grows_as_celerity_falls():
+    # Slower propagation means a later arrival.
+    assert derive_post_pad_minutes(200.0, celerity_km_s=0.36) < derive_post_pad_minutes(
+        200.0, celerity_km_s=0.30
+    )
+    assert derive_post_pad_minutes(200.0, celerity_km_s=0.30) < derive_post_pad_minutes(
+        200.0, celerity_km_s=0.24
+    )
+
+
+def test_derived_post_pad_matches_hand_computed_values():
+    # corridor 100: sqrt(100^2 + 100^2) = 141.42 km, /0.30 + 60 s
+    assert derive_post_pad_minutes(corridor_km=100.0) == pytest.approx(8.857, abs=1e-3)
+    # corridor 200: sqrt(200^2 + 100^2) = 223.6 km, capped at 215, /0.30 + 60 s
+    assert derive_post_pad_minutes(corridor_km=200.0) == pytest.approx(12.944, abs=1e-3)
+
+
+def test_max_corridor_uses_the_lowest_boom_altitude():
+    # sqrt(215^2 - 46^2). Using the 100 km continuum ceiling would give 190.3 km
+    # and warn spuriously on the 200 km default.
+    assert max_corridor_km() == pytest.approx(210.0, abs=0.1)
+    assert max_corridor_km() > 200.0
+
+
+def test_max_slant_is_not_a_public_parameter():
+    # Structural guard: the envelope is empirical survey data, not a caller
+    # preference, and the only motive to lower it is downloading less data.
+    import inspect
+    from groundtrack.pipeline import run_pipeline
+
+    for fn in (track_to_box_windows, run_pipeline):
+        names = set(inspect.signature(fn).parameters)
+        assert not {"max_slant_km", "MAX_SLANT_KM"} & names
+
+
+def test_derived_post_pad_ignores_propagated_altitude(equator_track):
+    # SGP4 reports orbital altitude (~140 km on a decaying object), not the
+    # acoustic source altitude (~65 km). It must not reach the derivation.
+    low = [TrackPoint(time=p.time, lat=p.lat, lon=p.lon, altitude_km=80.0)
+           for p in equator_track]
+    high = [TrackPoint(time=p.time, lat=p.lat, lon=p.lon, altitude_km=400.0)
+            for p in equator_track]
+    w_low = track_to_box_windows(low, corridor_km=100.0, skip_ocean=False)[0]
+    w_high = track_to_box_windows(high, corridor_km=100.0, skip_ocean=False)[0]
+    assert (w_low.t_download_end - w_low.t_exit) == (
+        w_high.t_download_end - w_high.t_exit
+    )
+
+
+def test_explicit_post_pad_bypasses_the_derivation(equator_track):
+    # An explicit value wins exactly, even where the derivation disagrees.
+    w = track_to_box_windows(
+        equator_track, corridor_km=100.0, post_pad_minutes=20.0, skip_ocean=False
+    )[0]
+    assert w.t_download_end == w.t_exit + timedelta(minutes=20.0)
+
+
+# --------------------------------------------------------------------------- #
+# Silent-failure warnings
+# --------------------------------------------------------------------------- #
+
+def test_too_short_post_pad_warns_and_is_still_honoured(equator_track):
+    # A clipped arrival is indistinguishable from no detection, so this must be loud.
+    with pytest.warns(UserWarning, match="shorter than"):
+        w = track_to_box_windows(
+            equator_track, corridor_km=200.0, post_pad_minutes=5.0, skip_ocean=False
+        )[0]
+    assert w.t_download_end == w.t_exit + timedelta(minutes=5.0)
+
+
+def test_sufficient_post_pad_does_not_warn(equator_track):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        track_to_box_windows(
+            equator_track, corridor_km=200.0, post_pad_minutes=20.0, skip_ocean=False
+        )
+
+
+def test_corridor_beyond_envelope_warns_and_is_still_honoured(equator_track):
+    with pytest.warns(UserWarning, match="detectability envelope"):
+        windows = track_to_box_windows(
+            equator_track, corridor_km=250.0, skip_ocean=False
+        )
+    assert windows  # corridor still applied, not clamped
+
+
+def test_default_corridor_does_not_warn(equator_track):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        track_to_box_windows(equator_track, skip_ocean=False)
+
+
+def test_derive_post_pad_rejects_nonsense_inputs():
+    # A negative celerity silently yields a NEGATIVE pad, which would put
+    # t_download_end before t_exit. An inverted window is indistinguishable
+    # from a normal short download, so it must fail loudly.
+    with pytest.raises(ValueError, match="celerity_km_s"):
+        derive_post_pad_minutes(200.0, celerity_km_s=0.0)
+    with pytest.raises(ValueError, match="celerity_km_s"):
+        derive_post_pad_minutes(200.0, celerity_km_s=-0.3)
+    with pytest.raises(ValueError, match="corridor_km"):
+        derive_post_pad_minutes(corridor_km=-50.0)
+    with pytest.raises(ValueError, match="margin_seconds"):
+        derive_post_pad_minutes(200.0, margin_seconds=-60.0)
+
+
+def test_derived_post_pad_is_always_positive():
+    # Guard against a future edit reintroducing an inverted window.
+    for corridor in (0.0, 1.0, 100.0, 1000.0):
+        for celerity in (0.18, 0.30, 0.45):
+            assert derive_post_pad_minutes(corridor, celerity_km_s=celerity) > 0
