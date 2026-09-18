@@ -5,13 +5,19 @@ Tools for discovering seismic signals from atmospheric re-entry events
 using orbital ground tracks and seismic station data.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # Allow user to import below functions directly from the package
 from .download import download_boxes 
 from .stations import load_and_filter_stations
 from .providers import resolve_providers
-from .tiling import track_to_box_windows, box_windows_to_download_requests, filter_ocean_boxes
+from .tiling import (
+    track_to_box_windows,
+    box_windows_to_download_requests,
+    filter_ocean_boxes,
+    derive_post_pad_minutes,
+    max_corridor_km,
+)
 from .processing import process_boxes, process_box, process_stream
 from .pipeline import run_pipeline
 
