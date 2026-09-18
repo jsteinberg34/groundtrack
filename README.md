@@ -372,7 +372,7 @@ plot_all_waveforms(
 - [x] Validated against Shenzhou-15 re-entry event
 - [x] Space-Track TLE fetching with local caching
 - [x] Orbital propagation and ground track tiling
-- [x] FDSN station discovery with 100 km corridor filter (configurable)
+- [x] FDSN station discovery with 200 km corridor filter (configurable)
 - [x] MassDownloader-based waveform acquisition
 - [x] Instrument response removal and bandpass filtering
 - [x] Visualization utilities
