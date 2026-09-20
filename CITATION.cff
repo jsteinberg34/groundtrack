@@ -16,7 +16,7 @@ authors:
   - orcid: 'https://orcid.org/0000-0002-7321-8401'
     given-names: Benjamin
     family-names: Fernando
-    affiliation: Los Alamos National Laboratory
+    affiliation: Department of Earth Sciences, University College London
 identifiers:
   - type: doi
     value: 10.5281/zenodo.20100696
