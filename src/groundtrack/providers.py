@@ -132,6 +132,23 @@ ALIASES = {
     "RESIF": "EPOSFR",
 }
 
+# Most requests a single run may have in flight against any one provider at
+# once, counting every request it sends there (inventory, availability,
+# waveforms, StationXML) across all boxes and threads. Box concurrency
+# (max_workers) and per-box threads (threads_per_client) multiply, so without
+# this a run at the defaults could direct nine requests at one archive.
+#
+# 3 because SCEDC publishes it: "please limit your downloads to 3 concurrent
+# sessions. Excessive downloads will result in your IP(s) being blacklisted."
+# (https://service.scedc.caltech.edu/webstp/, verified 2026-10-04). It is the
+# strictest limit any archive we query publishes, and it matches ObsPy's own
+# threads_per_client default, which was chosen to suit data centres. Applied
+# uniformly: an archive that publishes nothing has not said it accepts more.
+#
+# The limit is per run. Two runs executing at once in one process each get
+# their own allowance.
+PROVIDER_CONCURRENCY_LIMIT = 3
+
 # Reserved network codes that must never be downloaded, whatever the provider.
 # SY is the FDSN-reserved code for synthetic seismograms and EARTHSCOPE serves
 # thousands of them with real-looking coordinates; XX is a test/placeholder

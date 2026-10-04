@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import threading
 import warnings
@@ -25,6 +26,7 @@ from .stations import (
 from .providers import (
     AUTO,
     EXCLUDED_NETWORKS,
+    PROVIDER_CONCURRENCY_LIMIT,
     resolve_providers,
     serves_waveforms,
     skipped_by_region,
@@ -205,14 +207,67 @@ def _split_obtainable(
     return obtainable, sorted(set(not_obtainable))
 
 
-# Upper bound on concurrent boxes. Each worker opens up to threads_per_client
-# connections of its own, so the real load on a data centre is the product of
-# the two -- at this cap and the default threads_per_client that is already 30
-# concurrent connections per provider. FDSN providers are shared research
-# infrastructure with no published rate limit, so this exists to stop an
-# accidental max_workers=200 from hammering them, not because 10 is a measured
-# threshold. Raising it is a deliberate act; see download_boxes().
+# Upper bound on concurrent boxes. This bounds box count only, not the load on
+# any provider: that is PROVIDER_CONCURRENCY_LIMIT, enforced per provider by
+# _limit_concurrency() whatever max_workers is. Past a handful of workers the
+# extra boxes mostly queue for the same providers' permits, so the cap stops an
+# accidental max_workers=200 from spawning hundreds of threads for nothing. 10
+# is not a measured threshold. Raising it is a deliberate act; see
+# download_boxes().
 MAX_WORKERS_CAP = 10
+
+
+# Every client method a run uses to reach a provider: get_stations for the
+# inventory stage and MassDownloader's availability query, the bulk pair for
+# MassDownloader's waveform and StationXML downloads. As of ObsPy 1.5.0
+# MassDownloader calls nothing else; a test asserts that, because a method
+# missing from this list would silently bypass the limit.
+_GATED_CLIENT_METHODS = ("get_stations", "get_stations_bulk", "get_waveforms_bulk")
+
+
+def _limit_concurrency(client, permits: threading.Semaphore):
+    """
+    Make every request through ``client`` take one of ``permits`` first.
+
+    One client per provider is built per run and shared by every box and
+    thread, so gating its request methods bounds the run's total in-flight
+    requests to that provider, whatever max_workers and threads_per_client are.
+    A request over the limit waits for a permit; it never fails because of it.
+
+    Why the instance and not a subclass: tests substitute fakes by patching
+    the module-level ``Client`` name, which a ``ThrottledClient(name)`` call
+    would bypass, and a wrapping proxy fails MassDownloader's
+    ``isinstance(..., Client)`` check and gets treated as a provider name.
+    Replacing the methods on the instance keeps the object exactly what it was.
+
+    The gate is reentrant per thread. ObsPy's gated methods can reach each
+    other through ``self`` (``get_waveforms_bulk(attach_response=True)`` calls
+    ``self.get_stations``), and taking a second permit while holding one would
+    deadlock once every permit is held that way. The outer request has finished
+    transferring by then, so a thread still has at most one request in flight.
+
+    Methods the client does not define (test fakes) are left alone.
+    """
+    held = threading.local()
+
+    def gate(method):
+        @functools.wraps(method)
+        def gated(*args, **kwargs):
+            if getattr(held, "permit", False):
+                return method(*args, **kwargs)
+            with permits:
+                held.permit = True
+                try:
+                    return method(*args, **kwargs)
+                finally:
+                    held.permit = False
+        return gated
+
+    for name in _GATED_CLIENT_METHODS:
+        method = getattr(client, name, None)
+        if method is not None:
+            setattr(client, name, gate(method))
+    return client
 
 
 def _station_key(station: dict) -> tuple[str, str]:
@@ -642,11 +697,13 @@ def download_boxes(
     # ------------------------------------------------------------------
     # Concurrency
     # ------------------------------------------------------------------
-    # max_workers is how many boxes are downloaded at once. It multiplies
-    # against threads_per_client (MassDownloader's own internal pool) to give
-    # the total concurrent connections per data centre, so the default is kept
-    # deliberately low -- these are shared research providers. max_workers=1
-    # runs fully sequentially and gives deterministic box ownership.
+    # max_workers is how many boxes are downloaded at once; threads_per_client
+    # is how many download threads MassDownloader uses per provider within a
+    # box. Together they decide how work is spread. They do not decide the
+    # load on a provider: however they are set, the run keeps at most
+    # PROVIDER_CONCURRENCY_LIMIT (3) requests in flight against any one
+    # provider, and requests beyond that wait their turn. max_workers=1 runs
+    # fully sequentially and gives deterministic box ownership.
     max_workers: int = 3,
     threads_per_client: int = 3,
 
@@ -703,9 +760,17 @@ def download_boxes(
 
     Concurrency:
     ------------
-    ``max_workers`` boxes are downloaded at a time (default 3). This multiplies
-    against ``threads_per_client`` for total connections per data centre, so
-    both are kept low by default. Note that which box ends up owning a station
+    ``max_workers`` boxes are downloaded at a time (default 3), each using up
+    to ``threads_per_client`` download threads per provider (default 3).
+    Overlapping boxes often share a provider, so these would otherwise multiply
+    into the load on it. Instead, every request the run sends to a provider
+    (inventory, availability, waveforms, StationXML) takes one of
+    ``PROVIDER_CONCURRENCY_LIMIT`` permits (3, SCEDC's published limit), so no
+    provider ever has more than 3 of this run's requests in flight. A request
+    over the limit waits; nothing fails because of it. The limit is per run:
+    two runs executing at once in one process each get their own 3.
+
+    Which box ends up owning a station
     near several boxes is not deterministic when ``max_workers > 1``; the set of
     downloaded stations is. Pass ``max_workers=1`` for fully deterministic,
     sequential behaviour.
@@ -730,11 +795,17 @@ def download_boxes(
         dict.fromkeys(p for names in providers_by_box.values() for p in names)
     )
 
-    # Initialize provider clients once up front.
+    # Initialize provider clients once up front. Each is gated so the run as a
+    # whole never has more than PROVIDER_CONCURRENCY_LIMIT requests in flight
+    # against that provider, however many boxes and threads share it. The
+    # permits belong to this run, like the clients themselves.
     clients = {}
     for provider_name in provider_names:
         try:
-            clients[provider_name] = Client(provider_name)
+            clients[provider_name] = _limit_concurrency(
+                Client(provider_name),
+                threading.BoundedSemaphore(PROVIDER_CONCURRENCY_LIMIT),
+            )
         except Exception as e:
             if verbose:
                 print(f"Could not initialize provider {provider_name}: {repr(e)}")
@@ -820,13 +891,11 @@ def download_boxes(
     if n_workers > MAX_WORKERS_CAP:
         warnings.warn(
             f"max_workers={n_workers} exceeds the safety cap of "
-            f"{MAX_WORKERS_CAP}; clamping. Each worker opens up to "
-            f"threads_per_client={threads_per_client} connections of its own, so "
-            f"{n_workers} workers would open up to "
-            f"{n_workers * threads_per_client} concurrent connections per "
-            f"provider. FDSN providers are shared infrastructure. Raise "
-            f"groundtrack.download.MAX_WORKERS_CAP deliberately if you have "
-            f"cleared the load with the data centres you are querying.",
+            f"{MAX_WORKERS_CAP}; clamping. The cap bounds how many boxes run "
+            f"at once. Load on each provider is bounded separately, at "
+            f"{PROVIDER_CONCURRENCY_LIMIT} requests in flight per provider, so "
+            f"more workers mostly wait on the same providers. Raise "
+            f"groundtrack.download.MAX_WORKERS_CAP deliberately if you need to.",
             stacklevel=2,
         )
         n_workers = MAX_WORKERS_CAP
@@ -883,6 +952,7 @@ def download_boxes(
         "corridor_km": corridor_km,
         "max_workers": n_workers,
         "threads_per_client": threads_per_client,
+        "provider_concurrency_limit": PROVIDER_CONCURRENCY_LIMIT,
         # Distinct stations this run took ownership of. Not every claim yields a
         # file -- a provider can decline an individual station without raising --
         # so per-box "claimed_not_downloaded" records the shortfall.
