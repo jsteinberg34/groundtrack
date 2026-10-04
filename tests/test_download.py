@@ -642,8 +642,8 @@ def test_existing_station_keys_reads_identities_from_filenames(tmp_path):
 
 
 def test_max_workers_is_capped_with_a_warning(tmp_path, monkeypatch, make_track):
-    """An accidental huge max_workers must not be honoured -- each worker opens
-    threads_per_client connections of its own against shared infrastructure."""
+    """An accidental huge max_workers must not be honoured: it would spawn that
+    many box threads, nearly all of them waiting on the same providers."""
     from groundtrack.download import MAX_WORKERS_CAP
 
     _patch_clients(monkeypatch, SHARED_STATIONS)
@@ -1073,3 +1073,375 @@ def test_station_without_provenance_is_still_claimable(tmp_path, monkeypatch, ma
     obtainable, not_obtainable = _split_obtainable(stations, {})
     assert obtainable == stations
     assert not_obtainable == []
+
+
+# --------------------------------------------------------------------------- #
+# Per-provider concurrency limit
+# --------------------------------------------------------------------------- #
+
+class _PeakRecorder:
+    """Counts calls currently inside a block, and the most ever seen at once."""
+
+    def __init__(self):
+        import threading
+        self._lock = threading.Lock()
+        self.current = 0
+        self.peak = 0
+        self.calls = 0
+
+    def __enter__(self):
+        with self._lock:
+            self.current += 1
+            self.calls += 1
+            self.peak = max(self.peak, self.current)
+
+    def __exit__(self, *exc):
+        with self._lock:
+            self.current -= 1
+
+
+class _SlowClient:
+    """Each request method sleeps briefly inside the recorder, like a real HTTP call."""
+
+    def __init__(self, *recorders, delay=0.05):
+        self._recorders = recorders
+        self._delay = delay
+
+    def _request(self, value):
+        import time
+        from contextlib import ExitStack
+        with ExitStack() as stack:
+            for r in self._recorders:
+                stack.enter_context(r)
+            time.sleep(self._delay)
+        return value
+
+    def get_stations(self, *args, **kwargs):
+        return self._request("stations")
+
+    def get_stations_bulk(self, *args, **kwargs):
+        return self._request("stations_bulk")
+
+    def get_waveforms_bulk(self, *args, **kwargs):
+        return self._request("waveforms_bulk")
+
+
+def _call_from_threads(calls, timeout=10.0):
+    """
+    Run each zero-argument callable on its own thread and return the results.
+
+    Daemon threads joined with a timeout, not a ThreadPoolExecutor: an executor
+    waits for its threads on exit, so a deadlocked gate would hang the suite
+    instead of failing the test.
+    """
+    import threading
+    import time
+
+    results = [None] * len(calls)
+    errors = []
+
+    def run(i, call):
+        try:
+            results[i] = call()
+        except Exception as e:
+            errors.append(e)
+
+    threads = [
+        threading.Thread(target=run, args=(i, c), daemon=True)
+        for i, c in enumerate(calls)
+    ]
+    for t in threads:
+        t.start()
+    deadline = time.monotonic() + timeout
+    for t in threads:
+        t.join(max(0.0, deadline - time.monotonic()))
+    stuck = sum(t.is_alive() for t in threads)
+    if stuck:
+        pytest.fail(f"{stuck} of {len(threads)} calls still blocked after {timeout}s (deadlock?)")
+    if errors:
+        raise errors[0]
+    return results
+
+
+def test_gate_bounds_concurrent_requests_to_one_client():
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    recorder = _PeakRecorder()
+    client = _limit_concurrency(_SlowClient(recorder), threading.BoundedSemaphore(3))
+
+    results = _call_from_threads([client.get_stations] * 10)
+
+    assert results == ["stations"] * 10
+    assert recorder.calls == 10
+    assert recorder.peak == 3
+
+
+def test_gate_is_shared_across_all_request_methods():
+    """Inventory, waveform and StationXML requests all count against one limit."""
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    recorder = _PeakRecorder()
+    client = _limit_concurrency(_SlowClient(recorder), threading.BoundedSemaphore(3))
+
+    _call_from_threads(
+        [client.get_stations, client.get_stations_bulk, client.get_waveforms_bulk] * 4
+    )
+
+    assert recorder.calls == 12
+    assert recorder.peak == 3
+
+
+def test_providers_are_limited_independently():
+    """Load on one provider must not hold back requests to another."""
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    overall = _PeakRecorder()
+    a_rec, b_rec = _PeakRecorder(), _PeakRecorder()
+    a = _limit_concurrency(_SlowClient(a_rec, overall, delay=0.2), threading.BoundedSemaphore(3))
+    b = _limit_concurrency(_SlowClient(b_rec, overall, delay=0.2), threading.BoundedSemaphore(3))
+
+    _call_from_threads([a.get_stations] * 3 + [b.get_stations] * 3)
+
+    assert a_rec.peak == 3
+    assert b_rec.peak == 3
+    assert overall.peak == 6
+
+
+def test_gate_releases_its_permit_when_the_request_raises():
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    class Failing:
+        def get_stations(self, *args, **kwargs):
+            raise ValueError("provider said no")
+
+    permits = threading.BoundedSemaphore(3)
+    client = _limit_concurrency(Failing(), permits)
+
+    for _ in range(5):
+        with pytest.raises(ValueError, match="provider said no"):
+            client.get_stations()
+
+    # All three permits are free again: nothing leaked.
+    assert all(permits.acquire(blocking=False) for _ in range(3))
+    assert not permits.acquire(blocking=False)
+
+
+def test_nested_gated_call_does_not_deadlock():
+    """
+    ObsPy's get_waveforms_bulk(attach_response=True) calls self.get_stations.
+    With every permit held by such a call, a non-reentrant gate would wait
+    forever for a permit its own thread holds.
+    """
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    recorder = _PeakRecorder()
+
+    class Nesting(_SlowClient):
+        def get_waveforms_bulk(self, *args, **kwargs):
+            self._request(None)
+            return self.get_stations()
+
+    client = _limit_concurrency(Nesting(recorder, delay=0.02), threading.BoundedSemaphore(3))
+
+    # _call_from_threads gives up after a timeout, so a regression fails, not hangs.
+    results = _call_from_threads([client.get_waveforms_bulk] * 8, timeout=3.0)
+
+    assert results == ["stations"] * 8
+    assert recorder.peak <= 3
+
+
+def test_gate_passes_arguments_and_results_through_unchanged():
+    import threading
+    from groundtrack.download import _limit_concurrency
+
+    class Echo:
+        def get_stations(self, *args, **kwargs):
+            return args, kwargs
+
+    client = _limit_concurrency(Echo(), threading.BoundedSemaphore(3))
+
+    assert client.get_stations(1, 2, level="station") == ((1, 2), {"level": "station"})
+    # Methods a fake does not define are not invented.
+    assert not hasattr(client, "get_stations_bulk")
+    assert not hasattr(client, "get_waveforms_bulk")
+
+
+class _CountingClient(FakeFDSNClient):
+    """FakeFDSNClient whose every request is slow and recorded."""
+
+    def __init__(self, stations, recorder, delay=0.03):
+        super().__init__(stations)
+        self._recorder = recorder
+        self._delay = delay
+
+    def _slow(self):
+        import time
+        with self._recorder:
+            time.sleep(self._delay)
+
+    def get_stations(self, **kwargs):
+        self._slow()
+        return super().get_stations(**kwargs)
+
+    def get_stations_bulk(self, *args, **kwargs):
+        self._slow()
+
+    def get_waveforms_bulk(self, *args, **kwargs):
+        self._slow()
+
+
+class _ThreadedMassDownloader(FakeMassDownloader):
+    """
+    FakeMassDownloader never calls its clients, so it cannot show what reaches
+    a provider. This one does, the way ObsPy does: providers one after another,
+    each hit from a pool of threads_per_client threads, then files are written.
+    """
+
+    def download(self, domain, restrictions, mseed_storage=None,
+                 stationxml_storage=None, threads_per_client=3):
+        from concurrent.futures import ThreadPoolExecutor
+        for client in self.providers:
+            with ThreadPoolExecutor(max_workers=threads_per_client) as pool:
+                list(pool.map(lambda _: client.get_waveforms_bulk([]), range(threads_per_client)))
+                list(pool.map(lambda _: client.get_stations_bulk([]), range(threads_per_client)))
+        super().download(domain, restrictions, mseed_storage=mseed_storage,
+                         stationxml_storage=stationxml_storage,
+                         threads_per_client=threads_per_client)
+
+
+def _patch_counting_clients(monkeypatch, recorder):
+    monkeypatch.setattr(
+        "groundtrack.download.Client",
+        lambda name: _CountingClient(SHARED_STATIONS, recorder),
+    )
+    monkeypatch.setattr("groundtrack.download.MassDownloader", _ThreadedMassDownloader)
+
+
+def test_run_never_exceeds_the_provider_limit(tmp_path, monkeypatch, make_track):
+    """
+    Six overlapping boxes, four at a time, three threads each: up to twelve
+    requests could reach the one shared provider. The run must hold it to the
+    limit across inventory, waveform and StationXML requests alike.
+    """
+    from groundtrack.providers import PROVIDER_CONCURRENCY_LIMIT
+
+    recorder = _PeakRecorder()
+    _patch_counting_clients(monkeypatch, recorder)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(6), track, output_base=tmp_path, event_name="ev",
+        providers=("TEST",), corridor_km=100.0, verbose=False,
+        max_workers=4, threads_per_client=3,
+    )
+
+    assert manifest["failed"] == 0
+    assert recorder.peak <= PROVIDER_CONCURRENCY_LIMIT
+    # The limit was actually reached, so the test would notice it being exceeded.
+    assert recorder.peak == PROVIDER_CONCURRENCY_LIMIT
+
+
+def test_limit_does_not_change_what_is_downloaded(tmp_path, monkeypatch, make_track):
+    """A contended run downloads the same stations as a fully sequential one."""
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+    runs = {}
+    for label, workers, threads in (("sequential", 1, 1), ("contended", 4, 3)):
+        _patch_counting_clients(monkeypatch, _PeakRecorder())
+        manifest = download_boxes(
+            _overlapping_requests(6), track, output_base=tmp_path / label,
+            event_name="ev", providers=("TEST",), corridor_km=100.0,
+            verbose=False, max_workers=workers, threads_per_client=threads,
+        )
+        boxes_root = tmp_path / label / "ev" / "boxes"
+        runs[label] = (
+            {station for _, station in _downloaded_station_set(boxes_root)},
+            sum(r["claimed_station_count"] for r in manifest["results"]),
+            manifest["unique_stations_claimed"],
+        )
+
+    assert runs["contended"] == runs["sequential"]
+    assert runs["sequential"][0] == {"AAA", "BBB", "CCC"}
+
+
+def test_manifest_records_provider_concurrency_limit(tmp_path, monkeypatch, make_track):
+    from groundtrack.providers import PROVIDER_CONCURRENCY_LIMIT
+
+    _patch_clients(monkeypatch, SHARED_STATIONS)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        [_request()], track, output_base=tmp_path, event_name="ev",
+        providers=("TEST",), corridor_km=100.0, verbose=False,
+    )
+
+    assert manifest["provider_concurrency_limit"] == PROVIDER_CONCURRENCY_LIMIT == 3
+
+
+def test_mass_downloader_only_calls_gated_client_methods():
+    """
+    The limit holds only if every request MassDownloader makes goes through a
+    gated method. Scan ObsPy's mass_downloader source for any call to a public
+    Client method (through any variable name) and require it to be gated. A
+    future ObsPy calling, say, get_waveforms would bypass the limit silently;
+    this makes it fail loudly instead.
+    """
+    import inspect
+    import pathlib
+    import re
+
+    import obspy.clients.fdsn.mass_downloader as mass_downloader
+    from obspy.clients.fdsn import Client
+
+    from groundtrack.download import _GATED_CLIENT_METHODS
+
+    client_api = {
+        name for name, member in inspect.getmembers(Client, callable)
+        if not name.startswith("_")
+    } | {"_download"}
+
+    called = set()
+    for path in pathlib.Path(mass_downloader.__file__).parent.glob("*.py"):
+        called |= set(re.findall(r"\.(\w+)\s*\(", path.read_text())) & client_api
+
+    # Guard the scan itself: if it finds nothing, it is not looking properly.
+    assert "get_waveforms_bulk" in called
+
+    ungated = called - set(_GATED_CLIENT_METHODS)
+    assert not ungated, (
+        f"ObsPy's MassDownloader now calls Client.{sorted(ungated)}, which "
+        f"groundtrack.download._GATED_CLIENT_METHODS does not gate. Add it there, "
+        f"or those requests bypass the per-provider concurrency limit."
+    )
+
+
+def test_providers_on_one_server_share_the_limit(tmp_path, monkeypatch, make_track):
+    """
+    IRISPH5 is a distinct provider on EarthScope's server. Named together, the
+    two must share one allowance, or that server sees twice the limit.
+    """
+    from groundtrack.providers import PROVIDER_CONCURRENCY_LIMIT
+
+    recorder = _PeakRecorder()
+
+    def same_server(name):
+        client = _CountingClient(SHARED_STATIONS, recorder)
+        client.base_url = "https://service.example.org"
+        return client
+
+    monkeypatch.setattr("groundtrack.download.Client", same_server)
+    monkeypatch.setattr("groundtrack.download.MassDownloader", _ThreadedMassDownloader)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(6), track, output_base=tmp_path, event_name="ev",
+        providers=("ONE", "TWO"), corridor_km=100.0, verbose=False,
+        max_workers=4, threads_per_client=3,
+    )
+
+    assert manifest["failed"] == 0
+    assert recorder.peak == PROVIDER_CONCURRENCY_LIMIT

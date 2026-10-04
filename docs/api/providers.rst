@@ -75,6 +75,15 @@ The resolved list is ordered by how many stations each provider holds *inside th
 .. note::
    Stations in the reserved ``SY`` (synthetic) and ``XX`` (test) networks are never downloaded, in any selection mode, including when the caller names their host provider explicitly. EarthScope serves thousands of ``SY`` stations at real-looking coordinates and nothing else in the pipeline would stop one being treated as a candidate detection.
 
+Load on each provider
+---------------------
+
+A run never has more than ``PROVIDER_CONCURRENCY_LIMIT`` (3) requests in flight against any one provider, counting every request it sends there: inventory, availability, waveforms and StationXML, across all boxes and threads. Requests beyond that wait for a slot rather than fail. Without this, ``max_workers`` and ``threads_per_client`` multiply when overlapping boxes share a provider, which at the defaults could direct nine concurrent requests at one archive.
+
+Three is the limit SCEDC publishes ("please limit your downloads to 3 concurrent sessions. Excessive downloads will result in your IP(s) being blacklisted", https://service.scedc.caltech.edu/webstp/). It is the strictest limit any supported archive publishes, and it is applied to every provider, since an archive that publishes nothing has not said it accepts more. It also matches ObsPy's own ``threads_per_client`` default, so a groundtrack run never puts more concurrent load on an archive than a single plain ``MassDownloader`` call does.
+
+The limit is per run: two runs executing at once in one process each get their own three. It is also per server rather than per name, so providers sharing a server (``IRISPH5`` and ``EARTHSCOPE``) share one allowance. Each run manifest records it as ``provider_concurrency_limit``.
+
 Regenerating the map
 --------------------
 
