@@ -60,7 +60,7 @@ Ownership is bookkeeping, not geometry. Every box still records all the stations
 Concurrent Boxes
 ----------------
 
-Boxes are independent apart from that shared ownership record, so several download at once (``max_workers``, default 3). Because it multiplies against each downloader's own internal thread pool (``threads_per_client``, default 3) to give the total connections opened against a data centre, both defaults are deliberately conservative — FDSN providers are shared research infrastructure.
+Boxes are independent apart from that shared ownership record, so several download at once (``max_workers``, default 3), each using up to ``threads_per_client`` download threads per provider (default 3). Overlapping boxes often share a provider, so on their own these two settings would multiply into the load on it. Instead, a run never has more than three requests in flight against any one provider, counting every request it sends there across all boxes and threads; requests beyond that wait their turn. Three is the limit SCEDC publishes (exceeding it risks the client's IP being blacklisted), applied to every provider. The limit is per run, so two runs executing at once in one process each get their own allowance. Each run's manifest records it as ``provider_concurrency_limit``.
 
 The set of stations downloaded is identical no matter how many boxes run at a time. Which box ends up owning a station near several boxes is not: with concurrency it depends on which worker claims it first. Use ``max_workers=1`` when reproducible per-box placement matters.
 

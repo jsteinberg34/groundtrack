@@ -15,7 +15,7 @@ Each box writes its output to its own subdirectory (``box_000/``, ``box_001/``, 
    A box records **every** station near it in ``logs/filtered_stations.json`` and in ``filtered_station_count``, whether or not it was the box that downloaded them — that list is geometry, and plotting depends on it. What the box actually took responsibility for is reported separately as ``claimed_station_count`` and ``skipped_claimed_elsewhere_count``. A box can legitimately finish with zero waveform files because its neighbours owned all of its stations.
 
 .. note::
-   ``max_workers`` (default 3) controls how many boxes download concurrently, and multiplies against ``threads_per_client`` (default 3) for the total connections opened per data centre — keep both modest, since FDSN providers are shared infrastructure. Which box ends up owning a station near several boxes is **not** deterministic when ``max_workers > 1``; the set of stations downloaded is. Pass ``max_workers=1`` for fully sequential, reproducible ownership.
+   ``max_workers`` (default 3) controls how many boxes download concurrently, and ``threads_per_client`` (default 3) how many download threads each box uses per provider. Neither sets the load on a provider: a run keeps at most three requests in flight against any one provider (``PROVIDER_CONCURRENCY_LIMIT``, SCEDC's published limit), and the rest wait. Which box ends up owning a station near several boxes is **not** deterministic when ``max_workers > 1``; the set of stations downloaded is. Pass ``max_workers=1`` for fully sequential, reproducible ownership.
 
 .. automodule:: groundtrack.download
    :members:

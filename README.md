@@ -183,7 +183,8 @@ results = run_pipeline(
     event_name="shenzhou15_reentry",
     corridor_km=200.0,          # station inclusion threshold (default)
     chunk_km=300.0,             # along-track box size
-    max_workers=3,              # boxes downloaded concurrently (1 = sequential)
+    max_workers=3,              # boxes downloaded concurrently (1 = sequential);
+                                # at most 3 requests in flight per provider regardless
     apply_processing=True,      # remove instrument response + bandpass
     freqmin=1.0,                # bandpass lower corner (Hz)
     freqmax=20.0,               # bandpass upper corner (Hz)
@@ -260,6 +261,13 @@ own network. `extra_providers` rank last of all. Each box's manifest records
 `providers_queried` and `providers_skipped_by_region`, so a box that found
 nothing can be told apart from a box where the relevant provider was never
 asked.
+
+A run never has more than three requests in flight against any one provider,
+however many boxes download at once (`max_workers`) or how many threads each
+uses (`threads_per_client`). Requests beyond that wait their turn. Three is the
+limit SCEDC publishes, applied to every provider, since FDSN archives are shared
+research infrastructure. The limit is per run and is recorded in the manifest as
+`provider_concurrency_limit`.
 
 **Supported with `providers="auto"`** (26 archives). `EARTHSCOPE` is queried for
 every box; the rest are selected by region:
