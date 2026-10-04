@@ -82,7 +82,7 @@ A run never has more than ``PROVIDER_CONCURRENCY_LIMIT`` (3) requests in flight 
 
 Three is the limit SCEDC publishes ("please limit your downloads to 3 concurrent sessions. Excessive downloads will result in your IP(s) being blacklisted", https://service.scedc.caltech.edu/webstp/). It is the strictest limit any supported archive publishes, and it is applied to every provider, since an archive that publishes nothing has not said it accepts more. It also matches ObsPy's own ``threads_per_client`` default, so a groundtrack run never puts more concurrent load on an archive than a single plain ``MassDownloader`` call does.
 
-The limit is per run: two runs executing at once in one process each get their own three. Each run manifest records it as ``provider_concurrency_limit``.
+The limit is per run: two runs executing at once in one process each get their own three. It is also per server rather than per name, so providers sharing a server (``IRISPH5`` and ``EARTHSCOPE``) share one allowance. Each run manifest records it as ``provider_concurrency_limit``.
 
 Regenerating the map
 --------------------

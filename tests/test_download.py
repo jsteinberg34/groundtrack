@@ -1417,3 +1417,31 @@ def test_mass_downloader_only_calls_gated_client_methods():
         f"groundtrack.download._GATED_CLIENT_METHODS does not gate. Add it there, "
         f"or those requests bypass the per-provider concurrency limit."
     )
+
+
+def test_providers_on_one_server_share_the_limit(tmp_path, monkeypatch, make_track):
+    """
+    IRISPH5 is a distinct provider on EarthScope's server. Named together, the
+    two must share one allowance, or that server sees twice the limit.
+    """
+    from groundtrack.providers import PROVIDER_CONCURRENCY_LIMIT
+
+    recorder = _PeakRecorder()
+
+    def same_server(name):
+        client = _CountingClient(SHARED_STATIONS, recorder)
+        client.base_url = "https://service.example.org"
+        return client
+
+    monkeypatch.setattr("groundtrack.download.Client", same_server)
+    monkeypatch.setattr("groundtrack.download.MassDownloader", _ThreadedMassDownloader)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+
+    manifest = download_boxes(
+        _overlapping_requests(6), track, output_base=tmp_path, event_name="ev",
+        providers=("ONE", "TWO"), corridor_km=100.0, verbose=False,
+        max_workers=4, threads_per_client=3,
+    )
+
+    assert manifest["failed"] == 0
+    assert recorder.peak == PROVIDER_CONCURRENCY_LIMIT

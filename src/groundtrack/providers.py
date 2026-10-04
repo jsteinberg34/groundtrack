@@ -145,8 +145,9 @@ ALIASES = {
 # threads_per_client default, which was chosen to suit data centres. Applied
 # uniformly: an archive that publishes nothing has not said it accepts more.
 #
-# The limit is per run. Two runs executing at once in one process each get
-# their own allowance.
+# The limit is per run and per server: two runs executing at once in one
+# process each get their own allowance, and providers on the same server
+# (IRISPH5 and EARTHSCOPE) share one.
 PROVIDER_CONCURRENCY_LIMIT = 3
 
 # Reserved network codes that must never be downloaded, whatever the provider.

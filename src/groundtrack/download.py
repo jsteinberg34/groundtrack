@@ -799,13 +799,21 @@ def download_boxes(
     # whole never has more than PROVIDER_CONCURRENCY_LIMIT requests in flight
     # against that provider, however many boxes and threads share it. The
     # permits belong to this run, like the clients themselves.
+    #
+    # Permits are keyed by server, not provider name. Aliases already collapse
+    # to one name, but IRISPH5 is a distinct provider on EarthScope's server:
+    # named alongside EARTHSCOPE it must share EarthScope's permits, not double
+    # them. Clients without a base_url (test fakes) fall back to their name.
     clients = {}
+    permits_by_server: dict[str, threading.BoundedSemaphore] = {}
     for provider_name in provider_names:
         try:
-            clients[provider_name] = _limit_concurrency(
-                Client(provider_name),
-                threading.BoundedSemaphore(PROVIDER_CONCURRENCY_LIMIT),
+            client = Client(provider_name)
+            server = getattr(client, "base_url", None) or provider_name
+            permits = permits_by_server.setdefault(
+                server, threading.BoundedSemaphore(PROVIDER_CONCURRENCY_LIMIT)
             )
+            clients[provider_name] = _limit_concurrency(client, permits)
         except Exception as e:
             if verbose:
                 print(f"Could not initialize provider {provider_name}: {repr(e)}")
