@@ -1,6 +1,15 @@
 Changelog
 =========
 
+0.6.0 (2026-10-04)
+------------------
+
+- **A run now keeps at most three requests in flight against any single FDSN provider.** Previously ``max_workers`` and ``threads_per_client`` multiplied: overlapping boxes sharing a provider could direct up to nine concurrent requests at it at the defaults, and up to thirty at ``MAX_WORKERS_CAP``. SCEDC publishes a limit of three concurrent sessions and states that exceeding it results in IP blacklisting, so the old defaults could breach it on any Southern California event. Every request a run sends to a provider (inventory, availability, waveforms, StationXML) now takes one of three permits for that provider, and requests beyond that wait rather than fail. The limit is the same for every provider and lives in ``groundtrack.providers.PROVIDER_CONCURRENCY_LIMIT``.
+- The limit is per run. Two runs executing at once in one process each get their own three.
+- ``max_workers`` and ``threads_per_client`` keep their defaults and meaning; they now decide how work is spread, not how hard any provider is hit. What is downloaded is unchanged. Wall-clock time can increase, since providers that previously received more concurrent requests, EarthScope included, now receive at most three. On the Shenzhou-15 reference case a single trial went from 71 s (median of eight at the old defaults) to 104 s, fetching identical data.
+- Manifests gain a run-level ``provider_concurrency_limit`` field.
+- Corrected the source and documentation, which said FDSN providers have no published rate limit.
+
 0.5.0 (2026-09-18)
 ------------------
 
