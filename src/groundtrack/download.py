@@ -46,6 +46,17 @@ from .processing import (
 )
 
 
+# Location codes to try for each station, in order. MassDownloader matches them
+# with fnmatch and keeps only the first pattern that hits, so a station with
+# several locations still yields one channel and the usual codes win when
+# present. The trailing "*" is the point: a station whose channels sit only at
+# an unlisted code ("01" is common in regional networks; "02", "FB" and others
+# occur) is otherwise dropped before download with nothing in the manifest to
+# show it. Without "01" and "*" the Shenzhou-15 TIP-window run lost 40 of 639
+# claimed stations, every one of them carrying HHZ only at location "01".
+DEFAULT_LOCATION_PRIORITIES = ("", "00", "10", "20", "01", "*")
+
+
 def _normalize_providers(providers):
     """
     Make sure providers are always in a clean list format.
@@ -690,7 +701,7 @@ def download_boxes(
     # network is layered on top of automatic selection without replacing it.
     extra_providers: Sequence[str] = (),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
-    location_priorities: Sequence[str] = ("", "00", "10", "20"),
+    location_priorities: Sequence[str] = DEFAULT_LOCATION_PRIORITIES,
     overwrite_existing: bool = False,
     verbose: bool = True,
 

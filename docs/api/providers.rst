@@ -51,7 +51,7 @@ The region label is where the archive is based, not a boundary. Actual coverage 
 Not selected automatically
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- ``RASPISHAKE`` — citizen-science network, available via ``extra_providers``. Its ``EHZ``/``SHZ`` channels also need ``channel_priorities`` widened to be reachable at all.
+- ``RASPISHAKE`` — citizen-science network, available via ``extra_providers`` for **station discovery only**. Its ``EHZ``/``SHZ`` channels also need ``channel_priorities`` widened to be reachable at all. Waveforms are not reliably downloaded: ``MassDownloader`` requests data in bulk, and Raspberry Shake's server answers bulk requests for archived data with "no data" even when it serves the same data to a single-station request (only the previous day's data came back in testing). The stations end up in ``claimed_not_downloaded`` and the run still reports ``failed: 0``. Fetch their waveforms separately with ``Client("RASPISHAKE").get_waveforms(...)``, within Raspberry Shake's limit of 30 requests a minute.
 - ``IRISPH5`` — nodal experiment data, which can match enormous requests.
 - ``USGS``, ``EMSC``, ``ISC`` — event catalogues, no station metadata.
 - ``EIDA`` — a router holding no data of its own, routing to members already listed.

@@ -17,6 +17,7 @@ from groundtrack.download import (
     _count_files,
     _make_mseed_storage,
     _query_provider,
+    DEFAULT_LOCATION_PRIORITIES,
     download_boxes,
 )
 
@@ -1445,3 +1446,89 @@ def test_providers_on_one_server_share_the_limit(tmp_path, monkeypatch, make_tra
 
     assert manifest["failed"] == 0
     assert recorder.peak == PROVIDER_CONCURRENCY_LIMIT
+
+
+# --------------------------------------------------------------------------- #
+# station selection inside MassDownloader
+# --------------------------------------------------------------------------- #
+
+class _RecordingMassDownloader(FakeMassDownloader):
+    """Keeps every Restrictions object it is handed, so a test can check what
+    download_boxes actually asked MassDownloader for."""
+
+    seen = []
+
+    def download(self, domain, restrictions, **kwargs):
+        type(self).seen.append(restrictions)
+        return super().download(domain, restrictions, **kwargs)
+
+
+def _run_and_capture_restrictions(tmp_path, monkeypatch, make_track, **kwargs):
+    _RecordingMassDownloader.seen = []
+    _patch_clients(monkeypatch, STATIONS, mdl=_RecordingMassDownloader)
+    track = make_track(lat=0.0, lon_step=0.5, n=40)
+    manifest = download_boxes(
+        [_request()], track, output_base=tmp_path, event_name="ev",
+        providers=("TEST",), corridor_km=100.0, verbose=False, **kwargs,
+    )
+    assert len(_RecordingMassDownloader.seen) == 1
+    return manifest, _RecordingMassDownloader.seen[0]
+
+
+@pytest.mark.parametrize(
+    "available, expected",
+    [
+        # Only at a code the old default lacked: must still be selected.
+        (["01"], ["01"]),
+        # Only at a rare code no list would name: the trailing "*" catches it.
+        (["FB"], ["FB"]),
+        # Several locations: still exactly one, and the conventional code wins.
+        (["01", ""], [""]),
+        (["10", "00"], ["00"]),
+        (["02", "01"], ["01"]),
+    ],
+)
+def test_default_location_priorities_select_one_location_and_never_none(
+    available, expected
+):
+    # Use ObsPy's own selection function, not the fake MassDownloader, so this
+    # checks what a real run picks from a station's channel list.
+    from types import SimpleNamespace
+    from obspy.clients.fdsn.mass_downloader.utils import filter_channel_priority
+
+    channels = [SimpleNamespace(location=loc) for loc in available]
+    picked = filter_channel_priority(
+        channels, key="location", priorities=list(DEFAULT_LOCATION_PRIORITIES)
+    )
+
+    assert [c.location for c in picked] == expected
+
+
+def test_download_boxes_passes_default_location_priorities(
+    tmp_path, monkeypatch, make_track
+):
+    manifest, restrictions = _run_and_capture_restrictions(
+        tmp_path, monkeypatch, make_track
+    )
+
+    assert list(restrictions.location_priorities) == list(DEFAULT_LOCATION_PRIORITIES)
+    assert manifest["location_priorities"] == list(DEFAULT_LOCATION_PRIORITIES)
+
+
+def test_explicit_location_priorities_are_used_verbatim(
+    tmp_path, monkeypatch, make_track
+):
+    _, restrictions = _run_and_capture_restrictions(
+        tmp_path, monkeypatch, make_track, location_priorities=("00",)
+    )
+
+    assert list(restrictions.location_priorities) == ["00"]
+
+
+def test_run_pipeline_and_download_boxes_share_the_location_default():
+    import inspect
+    from groundtrack.pipeline import run_pipeline
+
+    for fn in (run_pipeline, download_boxes):
+        default = inspect.signature(fn).parameters["location_priorities"].default
+        assert default == DEFAULT_LOCATION_PRIORITIES, fn.__name__

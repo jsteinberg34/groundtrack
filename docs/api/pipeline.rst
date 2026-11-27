@@ -42,7 +42,7 @@ Parameters Reference
 - ``providers`` (default: ``"auto"``) — FDSN data providers to query. ``"auto"`` selects them per box from where each archive actually holds stations (see :doc:`providers`); an explicit sequence replaces that entirely and is used in the order given. ``None`` also means ``"auto"``
 - ``extra_providers`` (default: ``()``) — queried for every box in addition to the above, never region-filtered, ranked last. Use this to layer a citizen-science network onto automatic selection
 - ``channel_priorities`` (default: ``("HHZ", "BHZ")``) — channel preference order
-- ``location_priorities`` (default: ``("", "00", "10", "20")``) — location code preference order
+- ``location_priorities`` (default: ``("", "00", "10", "20", "01", "*")``) — location code preference order. Patterns are matched with ``fnmatch`` and the first one that hits wins, so each station yields one location; the trailing ``"*"`` means a station whose channels sit only at an unlisted code is still downloaded rather than silently skipped
 - ``overwrite_existing`` (default: ``False``) — if ``False``, existing waveforms are skipped
 
 **Processing**
