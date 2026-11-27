@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .providers import AUTO
+from .download import DEFAULT_LOCATION_PRIORITIES
 from .tiling import (
     DEFAULT_CORRIDOR_KM,
     DEFAULT_CELERITY_KM_S,
@@ -65,7 +66,7 @@ def run_pipeline(
     providers: Sequence[str] | str | None = AUTO,
     extra_providers: Sequence[str] = (),
     channel_priorities: Sequence[str] = ("HHZ", "BHZ"),
-    location_priorities: Sequence[str] = ("", "00", "10", "20"),
+    location_priorities: Sequence[str] = DEFAULT_LOCATION_PRIORITIES,
     overwrite_existing: bool = False,
     max_workers: int = 3,
     threads_per_client: int = 3,
