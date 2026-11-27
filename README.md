@@ -252,7 +252,7 @@ run_pipeline(..., providers="auto")
 run_pipeline(..., providers=("SCEDC", "NCEDC", "EARTHSCOPE"))
 
 # Auto plus one more, always queried regardless of region
-run_pipeline(..., extra_providers=("RASPISHAKE",))
+run_pipeline(..., extra_providers=("IRISPH5",))
 ```
 
 Providers are ordered by how many stations they hold inside each box, with
@@ -294,16 +294,27 @@ reaches well beyond Southern California. The selection map is measured from real
 holdings rather than drawn from these labels.
 
 Not selected automatically, but available by name: `RASPISHAKE` (citizen
-science), `IRISPH5` (nodal), `USGS`/`EMSC`/`ISC` (event catalogues only), and
+science; station discovery only, see below), `IRISPH5` (nodal), `USGS`/`EMSC`/`ISC` (event catalogues only), and
 `EIDA` (a router). `IRIS`, `EARTHSCOPE+USGS`, `GFZ`, `ODC` and `RESIF` are alternative
 names for archives already listed.
 
-#### Querying Raspberry Shake
+#### Raspberry Shake: station discovery only
 
-Adding the provider is not enough on its own. Raspberry Shakes are short-period
-instruments whose channels are `EHZ` and `SHZ`; they have never carried `HHZ` or
-`BHZ`, so the default `channel_priorities` filters them out at both discovery
-and download and you would silently get nothing. Widen the channels too:
+groundtrack can find Raspberry Shake stations near a corridor, but it does not
+currently download their waveforms reliably. ObsPy's `MassDownloader`, which
+groundtrack uses for every download, requests data with bulk queries, and
+Raspberry Shake's server answers those with "no data" for archived data even
+when it serves the same data to a single-station request. In testing, only data
+from the previous day came back through the bulk path. Nothing fails visibly:
+the stations are listed in each box's `claimed_not_downloaded` and the run still
+reports `failed: 0`. To get Raspberry Shake waveforms, use the station list
+groundtrack produces and fetch each one with ObsPy's `Client("RASPISHAKE").get_waveforms(...)`,
+keeping to Raspberry Shake's limit of 30 requests a minute.
+
+To include the stations in discovery, adding the provider is not enough on its
+own. Raspberry Shakes are short-period instruments whose channels are `EHZ` and
+`SHZ`; they have never carried `HHZ` or `BHZ`, so the default
+`channel_priorities` filters them out entirely. Widen the channels too:
 
 ```python
 run_pipeline(
@@ -315,11 +326,8 @@ run_pipeline(
 
 Appending rather than replacing matters: `channel_priorities` is a priority
 list, so professional stations still match `HHZ` first and only the shakes fall
-through to `EHZ`. (`ENZ` is deliberately omitted — every Shake with an
+through to `EHZ`. (`ENZ` is deliberately omitted, since every Shake with an
 accelerometer also has `EHZ`, so it would never be selected.)
-
-Note that Raspberry Shake data is high volume and variable quality, and the
-default gap rejection discards a meaningful fraction of it.
 
 ### Two-Step Workflow
 

@@ -94,7 +94,10 @@ ALWAYS_QUERIED = ("EARTHSCOPE",)
 
 # Reachable only when the caller names them. RASPISHAKE is a citizen-science
 # network: high volume, variable quality, and its channels (EHZ/SHZ) do not even
-# match the default channel_priorities. Opt in via ``extra_providers``.
+# match the default channel_priorities. Opt in via ``extra_providers``. Useful
+# for discovery only: its dataselect answers bulk requests for archived data
+# with 204 even when a single-station GET for the same data succeeds, and
+# MassDownloader only sends bulk requests.
 EXPLICIT_ONLY = frozenset({"RASPISHAKE"})
 
 # Never chosen automatically, for reasons that are not about geography:

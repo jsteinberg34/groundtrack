@@ -130,6 +130,10 @@ def run_pipeline(
                         extra_providers=("RASPISHAKE",) — note that also needs
                         channel_priorities widened to include "EHZ" and "SHZ",
                         since Raspberry Shakes never carry "HHZ" or "BHZ".
+                        Raspberry Shake is discovery only: its server answers
+                        MassDownloader's bulk requests for archived data with
+                        "no data", so those stations land in
+                        claimed_not_downloaded rather than on disk.
 
     Returns:
         dict with keys:
